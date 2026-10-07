@@ -83,13 +83,18 @@ WorldSocket::WorldSocket(IO::Networking::AsyncSocket socket)
 
 WorldSocket::~WorldSocket()
 {
-    CloseSocket();
-    sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] Connection closed", GetRemoteIpString().c_str());
-
+    // Cancel the timeout before touching anything else. Cancel() waits for an in-flight
+    // callback to finish (DeleteTimerQueueTimer with INVALID_HANDLE_VALUE), but only on the
+    // branch where it wins the pending-timer erase race. Closing the socket first could let
+    // the callback run against a partially destroyed object, so cancel first.
     if (m_sessionNoAuthTimeout)
     {
         m_sessionNoAuthTimeout->Cancel();
+        m_sessionNoAuthTimeout.reset();
     }
+
+    CloseSocket();
+    sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] Connection closed", GetRemoteIpString().c_str());
 }
 
 void WorldSocket::DoRecvIncomingData()
