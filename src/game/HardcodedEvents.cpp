@@ -5,6 +5,7 @@
 #include "HardcodedEvents.h"
 #include "World.h"
 #include "MapManager.h"
+#include "MapPersistentStateMgr.h"
 #include "WaypointManager.h"
 #include "Chat.h"
 #include "GridSearchers.h"
@@ -253,6 +254,22 @@ void DragonsOfNightmare::CheckSingleVariable(uint32 idx, uint32& value)
     }
 }
 
+void DragonsOfNightmare::aliveCountFromRespawnState(MapPersistentState& state, ObjectGuid const& guid, time_t respawnTime, uint32& alive)
+{
+    time_t const currentRespawn = state.GetCreatureRespawnTime(guid.GetCounter());
+    if (currentRespawn <= time(nullptr))
+    {
+        // No pending respawn: the dragon is alive and will spawn when the map loads.
+        ++alive;
+        return;
+    }
+
+    // Dead with a pending respawn. Only persist when the value changes, otherwise every
+    // event tick would issue a redundant write for each dead dragon.
+    if (currentRespawn != respawnTime)
+        state.SaveCreatureRespawnTime(guid.GetCounter(), respawnTime);
+}
+
 bool DragonsOfNightmare::GetAliveCountAndUpdateRespawnTime(std::vector<ObjectGuid> const& dragons, uint32& alive, time_t respawnTime)
 {
     bool allFound = true;
@@ -274,22 +291,45 @@ bool DragonsOfNightmare::GetAliveCountAndUpdateRespawnTime(std::vector<ObjectGui
 
         if (!map)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "GameEventMgr: [Dragons of Nightmare] instance %u of map %u not found!", instanceId, cData->position.mapId);
-            allFound = false;
+            // Continent maps are created on demand when players enter them, so a missing
+            // map simply means nobody is there. Fall back to the persistent respawn state
+            // (which outlives the map) instead of reporting an error.
+            if (MapPersistentState* state = sMapPersistentStateMgr.GetPersistentState(cData->position.mapId, instanceId))
+                aliveCountFromRespawnState(*state, guid, respawnTime, alive);
+            else
+            {
+                // No respawn state means no pending respawn: the dragon is alive and
+                // will spawn when the map loads.
+                ++alive;
+                sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "GameEventMgr: [Dragons of Nightmare] instance %u of map %u not loaded and no respawn state for creature %u.", instanceId, cData->position.mapId, guid.GetCounter());
+            }
             continue;
         }
 
+        MapPersistentState* state = map->GetPersistentState();
         auto pCreature = map->GetCreature(guid);
 
         if (!pCreature)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "GameEventMgr: [Dragons of Nightmare] creature %u not found!", guid.GetCounter());
-            allFound = false;
+            // Creature object is not in memory: either dead with a pending respawn
+            // time, or alive but in an unloaded grid. Check the respawn state to tell.
+            if (state)
+                aliveCountFromRespawnState(*state, guid, respawnTime, alive);
+            else
+            {
+                ++alive;
+                sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "GameEventMgr: [Dragons of Nightmare] creature %u not in memory and map %u has no persistent state.", guid.GetCounter(), cData->position.mapId);
+            }
             continue;
         }
 
         if (pCreature->IsDead())
-            map->GetPersistentState()->SaveCreatureRespawnTime(guid.GetCounter(), respawnTime);
+        {
+            // Same write guard as the respawn-state path above: this runs on every event
+            // tick, so avoid a redundant character DB write when nothing changed.
+            if (state && state->GetCreatureRespawnTime(guid.GetCounter()) != respawnTime)
+                state->SaveCreatureRespawnTime(guid.GetCounter(), respawnTime);
+        }
         else
             ++alive;
     }
