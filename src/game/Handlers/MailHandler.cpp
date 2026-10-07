@@ -327,8 +327,17 @@ void WorldSession::HandleSendMailCallback(WorldSession::AsyncMailSendRequest* re
         return;
     }
 
-    AccountPersistentData& data = sAccountMgr.GetAccountPersistentData(GetAccountId());
-    if (!data.CanMail(receiverAccount))
+    // Check and record the mail under one lock so the spam state cannot change in between.
+    bool const canMail = sAccountMgr.WithAccountPersistentData(GetAccountId(),
+        [receiverAccount](AccountPersistentData& data)
+        {
+            if (!data.CanMail(receiverAccount))
+                return false;
+            data.JustMailed(receiverAccount);
+            return true;
+        });
+
+    if (!canMail)
     {
         std::stringstream details;
         std::string from = ChatHandler(this).playerLink(GetMasterPlayer()->GetName());
@@ -346,7 +355,6 @@ void WorldSession::HandleSendMailCallback(WorldSession::AsyncMailSendRequest* re
         SendMailResult(0, MAIL_SEND, MAIL_OK);
         return;
     }
-    data.JustMailed(receiverAccount);
 
     SendMailResult(0, MAIL_SEND, MAIL_OK);
 

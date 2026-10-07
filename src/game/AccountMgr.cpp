@@ -60,9 +60,12 @@ AccountOpResult AccountMgr::CreateAccount(std::string username, std::string pass
     std::string s_hex = srp.GetSalt().AsHexStr();
     std::string v_hex = srp.GetVerifier().AsHexStr();
 
+    std::string safe_username = username;
+    LoginDatabase.escape_string(safe_username);
+
     bool update_sv = LoginDatabase.PExecute(
         "INSERT INTO account(`username`, `v`, `s`, `joindate`) VALUES('%s','%s','%s',NOW())",
-        username.c_str(), v_hex.c_str(), s_hex.c_str());
+        safe_username.c_str(), v_hex.c_str(), s_hex.c_str());
 
     if (!update_sv)
         return AOR_DB_INTERNAL_ERROR;                       // unexpected error
@@ -145,7 +148,10 @@ AccountOpResult AccountMgr::ChangeUsername(uint32 accid, std::string new_uname, 
     if (!update_sv)
         return AOR_DB_INTERNAL_ERROR;                       // unexpected error
 
-    GetAccountPersistentData(accid).m_username = new_uname;
+    WithAccountPersistentData(accid, [&new_uname](AccountPersistentData& data)
+    {
+        data.m_username = new_uname;
+    });
 
     return AOR_OK;
 }
@@ -204,12 +210,18 @@ void AccountMgr::Load()
 
 AccountTypes AccountMgr::GetSecurity(uint32 accountId)
 {
-    return GetAccountPersistentData(accountId).m_security;
+    return WithAccountPersistentData(accountId, [](AccountPersistentData const& data)
+    {
+        return data.m_security;
+    });
 }
 
 void AccountMgr::SetSecurity(uint32 accountId, AccountTypes security)
 {
-    GetAccountPersistentData(accountId).m_security = security;
+    WithAccountPersistentData(accountId, [security](AccountPersistentData& data)
+    {
+        data.m_security = security;
+    });
     LoginDatabase.PExecute("REPLACE INTO `account_access` (`id`, `gmlevel`, `RealmID`) VALUES (%u, %u, %u)", accountId, security, realmID);
 }
 
@@ -217,8 +229,10 @@ bool AccountMgr::HasTrialRestrictions(uint32 accountId)
 {
     if (sWorld.getConfig(CONFIG_BOOL_RESTRICT_UNVERIFIED_ACCOUNTS))
     {
-        AccountPersistentData const& data = GetAccountPersistentData(accountId);
-        return !data.m_verifiedEmail && data.m_security <= SEC_PLAYER;
+        return WithAccountPersistentData(accountId, [](AccountPersistentData const& data)
+        {
+            return !data.m_verifiedEmail && data.m_security <= SEC_PLAYER;
+        });
     }
 
     return false;
@@ -482,7 +496,11 @@ void AccountPersistentData::WhisperedBy(MasterPlayer* whisperer)
 
 uint32 AccountPersistentData::CountWhispersTo(MasterPlayer* from, MasterPlayer* player)
 {
-    sAccountMgr.GetAccountPersistentData(player->GetSession()->GetAccountId()).WhisperedBy(from);
+    sAccountMgr.WithAccountPersistentData(player->GetSession()->GetAccountId(), [from](AccountPersistentData& targetData)
+    {
+        targetData.WhisperedBy(from);
+    });
+
     WhisperData& data = m_whisperTargets[player->GetGUIDLow()];
     ++data.whispers_count;
     if (data.whispers_count == 1)
@@ -529,27 +547,14 @@ bool AccountPersistentData::CanMail(uint32 targetAccount)
     return totalScore < allowedScore;
 }
 
-AccountPersistentData& AccountMgr::GetAccountPersistentData(uint32 accountId)
-{
-    {
-        std::shared_lock<std::shared_timed_mutex> guard(m_accountPersistentDataMutex);
-        auto itr = m_accountPersistentData.find(accountId);
-        if (itr != m_accountPersistentData.end())
-            return itr->second;
-    }
-
-    {
-        std::lock_guard<std::shared_timed_mutex> guard(m_accountPersistentDataMutex);
-        return m_accountPersistentData[accountId];
-    }
-}
-
 void AccountMgr::LoadAccountData()
 {
     std::unique_ptr<QueryResult> result(LoginDatabase.PQuery("SELECT a.`id`, a.`username`, a.`email`, a.`email_verif`, aa.`gmlevel` FROM `account` a LEFT JOIN `account_access` aa ON a.`id` = aa.`id` AND aa.`RealmID` IN (-1, %u)", realmID));
 
     if (!result)
         return;
+
+    std::lock_guard<std::shared_timed_mutex> guard(m_accountPersistentDataMutex);
 
     do
     {
@@ -573,6 +578,9 @@ void AccountMgr::LoadAccountData()
 
 void AccountMgr::UpdateAccountData(uint32 accountId, std::string const& username, std::string const& email, bool verifiedEmail, AccountTypes security)
 {
+    // Called from the network thread while other threads read this map, so the write must
+    // hold the same lock the readers use.
+    std::lock_guard<std::shared_timed_mutex> guard(m_accountPersistentDataMutex);
     AccountPersistentData& data = m_accountPersistentData[accountId];
     data.m_username = username;
     data.m_email = email;

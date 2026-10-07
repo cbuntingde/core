@@ -27,6 +27,7 @@
 #include <string>
 #include <memory>
 #include <shared_mutex>
+#include <utility>
 
 enum AccountOpResult
 {
@@ -99,7 +100,15 @@ class AccountMgr
 
         void Load();
         void LoadAccountData();
-        AccountPersistentData& GetAccountPersistentData(uint32 accountId);
+        // Access to an account's cached data must happen while m_accountPersistentDataMutex is
+        // held. UpdateAccountData is called from the network thread, so use this helper rather
+        // than handing out a reference that outlives the lock.
+        template <typename F>
+        auto WithAccountPersistentData(uint32 accountId, F&& func) -> decltype(func(std::declval<AccountPersistentData&>()))
+        {
+            std::lock_guard<std::shared_timed_mutex> guard(m_accountPersistentDataMutex);
+            return func(m_accountPersistentData[accountId]);
+        }
         void UpdateAccountData(uint32 accountId, std::string const& username, std::string const& email, bool verifiedEmail, AccountTypes security);
 
         uint32 GetId(std::string username);
