@@ -26,6 +26,7 @@
 #include "Policies/Singleton.h"
 #include <string>
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <utility>
 
