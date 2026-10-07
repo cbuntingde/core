@@ -1,6 +1,6 @@
 
 # Generic boolean options
-option(BUILD_FOR_HOST_CPU             "Build specifically for the host CPU via `-march=native` (might not run on different machines)" ON)
+option(BUILD_FOR_HOST_CPU             "Build specifically for the host CPU via `-march=native` (might not run on different machines)" OFF)
 option(BUILD_WARNINGS_AS_ERROR        "Treat compiler warnings as errors (/WX on MSVC, -Werror on GCC/Clang)"                         OFF)
 option(USE_SCRIPTS                    "Build scripts"                                                                                 ON)
 option(BUILD_EXTRACTORS               "Build extractors"                                                                              OFF)

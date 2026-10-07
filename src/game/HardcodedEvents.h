@@ -7,6 +7,8 @@
 #include "GameEventMgr.h"
 #include "ObjectMgr.h"
 
+class MapPersistentState;
+
 /*
  * Elemental Invasion
  */
@@ -87,6 +89,11 @@ struct DragonsOfNightmare : WorldEvent
     static void CheckSingleVariable(uint32 idx, uint32& value);
 
 private:
+    // Resolves a dragon that has no in-memory Creature from its persistent respawn state.
+    // Counts it alive when no pending respawn exists, otherwise pushes its respawn time
+    // forward. Writes only when the stored value actually differs, because this runs on
+    // every game event tick and an unconditional save would hammer the character DB.
+    static void aliveCountFromRespawnState(MapPersistentState& state, ObjectGuid const& guid, time_t respawnTime, uint32& alive);
     bool GetAliveCountAndUpdateRespawnTime(std::vector<ObjectGuid> const& dragons, uint32& alive, time_t respawnTime);
     bool LoadDragons(std::vector<ObjectGuid>& dragonGUIDs);
     //void GetExistingDragons(std::vector<ObjectGuid>& dragonGUIDs, std::vector<Creature*>& existingDragons);
