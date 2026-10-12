@@ -96,6 +96,7 @@ class WorldUpdateCounter
 
         void Reset() { m_tmStart = WorldTimer::tickTime(); }
         void ResetTo(uint32 lastUpdate) {  m_tmStart = lastUpdate; }
+        bool IsUpdatedAt(uint32 now) const { return m_tmStart != 0 && m_tmStart == now; }
     private:
         uint32 m_tmStart;
 };
@@ -476,6 +477,8 @@ class WorldObject : public Object
 
                 void UpdateRealTime(uint32 now, uint32 time_diff)
                 {
+                    if (m_obj->IsCreature() && m_obj->m_updateTracker.IsUpdatedAt(now))
+                        return;
                     m_obj->Update(m_obj->m_updateTracker.timeElapsed(now), time_diff);
                     m_obj->m_updateTracker.ResetTo(now);
                 }

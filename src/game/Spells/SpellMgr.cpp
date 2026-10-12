@@ -3961,6 +3961,7 @@ void SpellMgr::LoadSpell(Field* fields)
     // it does no damage, so behavior changed then.
     // In classic the spell was edited in 1.13.6 and
     // the timer was set to 5000, as it didn't work before.
+    // Spells with PROC_FLAG_HEARTBEAT should proc on heartbeat instead of using a fixed timer.
     for (int i = EFFECT_INDEX_0; i <= EFFECT_INDEX_2; ++i)
     {
         switch (spell->EffectApplyAuraName[i])
@@ -3975,7 +3976,7 @@ void SpellMgr::LoadSpell(Field* fields)
         case SPELL_AURA_PERIODIC_MANA_LEECH:
         case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
         case SPELL_AURA_POWER_BURN_MANA:
-            if (spell->EffectAmplitude[i] == 0)
+            if (spell->EffectAmplitude[i] == 0 && !(spell->procFlags & PROC_FLAG_HEARTBEAT))
                 spell->EffectAmplitude[i] = 5000;
             break;
         }
