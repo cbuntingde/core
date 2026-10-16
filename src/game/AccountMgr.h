@@ -133,13 +133,13 @@ class AccountMgr
 
         void LoadAccountWarnings();
         void WarnAccount(uint32 acc, std::string reason) { std::lock_guard<std::shared_timed_mutex> guard(m_accountWarningsMutex); m_accountWarnings[acc] = reason; }
-        char const* GetWarningText(uint32 acc) const
+        std::string GetWarningText(uint32 acc) const
         {
             std::shared_lock<std::shared_timed_mutex> guard(m_accountWarningsMutex);
             auto itr = m_accountWarnings.find(acc);
             if (itr != m_accountWarnings.end())
-                return itr->second.c_str();
-            return nullptr;
+                return itr->second;
+            return {};
         }
 
         // Max instance reset per account per hour

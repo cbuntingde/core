@@ -562,10 +562,11 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder *holder)
         guild->BroadcastEvent(GE_SIGNED_ON, pCurrChar->GetObjectGuid(), pCurrChar->GetName());
     }
 
-    if (char const* warning = sAccountMgr.GetWarningText(GetAccountId()))
+    std::string warning = sAccountMgr.GetWarningText(GetAccountId());
+    if (!warning.empty())
     {
-        pCurrChar->PSendSysMessage(LANG_ACCOUNT_WARNED, warning);
-        SendNotification("WARNING: %s", warning);
+        pCurrChar->PSendSysMessage(LANG_ACCOUNT_WARNED, warning.c_str());
+        SendNotification("WARNING: %s", warning.c_str());
     }
 
     if (!pCurrChar->IsAlive())
