@@ -31,6 +31,7 @@
 #include "Pet.h"
 #include "Group.h"
 #include "Utilities/Random.h"
+#include "Database/SqlPreparedStatement.h"
 
 void WorldSession::HandlePetAction(WorldPackets::Pet::PetAction const& packet)
 {
@@ -336,9 +337,12 @@ void WorldSession::HandlePetRename(WorldPackets::Pet::PetRename const& packet)
     pet->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_RENAME);
 
     CharacterDatabase.BeginTransaction();
-    std::string safeName = packet.name;
-    CharacterDatabase.escape_string(safeName);
-    CharacterDatabase.PExecute("UPDATE `character_pet` SET `name` = '%s', `renamed` = '1' WHERE `owner_guid` = '%u' AND `id` = '%u'", safeName.c_str(), _player->GetGUIDLow(), pet->GetCharmInfo()->GetPetNumber());
+    static SqlStatementID updPetName;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(updPetName, "UPDATE `character_pet` SET `name` = ?, `renamed` = '1' WHERE `owner_guid` = ? AND `id` = ?");
+    stmt.addString(packet.name);
+    stmt.addUInt32(_player->GetGUIDLow());
+    stmt.addUInt32(pet->GetCharmInfo()->GetPetNumber());
+    stmt.Execute();
     CharacterDatabase.CommitTransaction();
 
     pet->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, uint32(time(nullptr)));

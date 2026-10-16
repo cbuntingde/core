@@ -25,6 +25,7 @@
 
 #include "World.h"
 #include "Database/DatabaseEnv.h"
+#include "Database/SqlPreparedStatement.h"
 #include "Config/Config.h"
 #include "Platform/Define.h"
 #include "SystemConfig.h"
@@ -2458,23 +2459,29 @@ void World::KickAllLess(AccountTypes sec)
 
 void World::WarnAccount(uint32 accountId, std::string from, std::string reason, char const* type)
 {
-    LoginDatabase.escape_string(from);
     reason = std::string(type) + ": " + reason;
-    LoginDatabase.escape_string(reason);
 
-    LoginDatabase.PExecute("INSERT INTO `account_banned` (`id`, `bandate`, `unbandate`, `bannedby`, `banreason`, `active`, `realm`) VALUES ('%u', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+1, '%s', '%s', '0', %u)",
-            accountId, from.c_str(), reason.c_str(), realmID);
+    static SqlStatementID insWarn;
+    SqlStatement stmt = LoginDatabase.CreateStatement(insWarn, "INSERT INTO `account_banned` (`id`, `bandate`, `unbandate`, `bannedby`, `banreason`, `active`, `realm`) VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+1, ?, ?, '0', ?)");
+    stmt.addUInt32(accountId);
+    stmt.addString(from);
+    stmt.addString(reason);
+    stmt.addUInt32(realmID);
+    stmt.Execute();
 }
 
 void World::BanAccount(uint32 accountId, uint32 duration, std::string reason, std::string const& author)
 {
-    LoginDatabase.escape_string(reason);
     std::string safe_author = author;
-    LoginDatabase.escape_string(safe_author);
 
-    //No SQL injection as strings are escaped
-    LoginDatabase.PExecute("INSERT INTO `account_banned` (`id`, `bandate`, `unbandate`, `bannedby`, `banreason`, `active`, `realm`) VALUES ('%u', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+%u, '%s', '%s', '1', %u)",
-        accountId, duration, safe_author.c_str(), reason.c_str(), realmID);
+    static SqlStatementID insBan;
+    SqlStatement stmt = LoginDatabase.CreateStatement(insBan, "INSERT INTO `account_banned` (`id`, `bandate`, `unbandate`, `bannedby`, `banreason`, `active`, `realm`) VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+?, ?, ?, '1', ?)");
+    stmt.addUInt32(accountId);
+    stmt.addUInt32(duration);
+    stmt.addString(safe_author);
+    stmt.addString(reason);
+    stmt.addUInt32(realmID);
+    stmt.Execute();
 
     if (duration > 0)
         sAccountMgr.BanAccount(accountId, time(nullptr) + duration);
@@ -2550,9 +2557,14 @@ public:
 
             if (holder->GetBanMode() != BAN_IP)
             {
-                //No SQL injection as strings are escaped
-                LoginDatabase.PExecute("INSERT INTO `account_banned` (`id`, `bandate`, `unbandate`, `bannedby`, `banreason`, `active`, `realm`) VALUES ('%u', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+%u, '%s', '%s', '1', %u)",
-                    account, holder->GetDuration(), holder->GetAuthor().c_str(), holder->GetReason().c_str(), holder->GetRealmId());
+                static SqlStatementID insBanResult;
+                SqlStatement stmt = LoginDatabase.CreateStatement(insBanResult, "INSERT INTO `account_banned` (`id`, `bandate`, `unbandate`, `bannedby`, `banreason`, `active`, `realm`) VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+?, ?, ?, '1', ?)");
+                stmt.addUInt32(account);
+                stmt.addUInt32(holder->GetDuration());
+                stmt.addString(holder->GetAuthor());
+                stmt.addString(holder->GetReason());
+                stmt.addUInt32(holder->GetRealmId());
+                stmt.Execute();
                 if (holder->GetDuration() > 0)
                     sAccountMgr.BanAccount(account, time(nullptr) + holder->GetDuration());
                 else
@@ -2640,8 +2652,10 @@ bool World::RemoveBanAccount(BanMode mode, std::string const& source, std::strin
 {
     if (mode == BAN_IP)
     {
-        LoginDatabase.escape_string(nameOrIP);
-        LoginDatabase.PExecute("DELETE FROM `ip_banned` WHERE `ip` = '%s'", nameOrIP.c_str());
+        static SqlStatementID delIpBan;
+        SqlStatement stmt = LoginDatabase.CreateStatement(delIpBan, "DELETE FROM `ip_banned` WHERE `ip` = ?");
+        stmt.addString(nameOrIP);
+        stmt.Execute();
         sAccountMgr.UnbanIP(nameOrIP);
     }
     else

@@ -34,6 +34,7 @@
 #include "World.h"
 #include "Group.h"
 #include "InstanceData.h"
+#include "Database/SqlPreparedStatement.h"
 #include "ProgressBar.h"
 
 typedef MaNGOS::ClassLevelLockable<MapPersistentStateManager, std::mutex> MapPersistanceStateManagerLock;
@@ -258,11 +259,16 @@ void DungeonPersistentState::SaveToDB()
         if (iData && iData->Save())
         {
             data = iData->Save();
-            CharacterDatabase.escape_string(data);
         }
     }
 
-    CharacterDatabase.PExecute("INSERT INTO `instance` (`id`, `map`, `reset_time`, `data`) VALUES ('%u', '%u', '" UI64FMTD "', '%s')", GetInstanceId(), GetMapId(), (uint64)GetResetTimeForDB(), data.c_str());
+    static SqlStatementID insInstance;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(insInstance, "INSERT INTO `instance` (`id`, `map`, `reset_time`, `data`) VALUES (?, ?, '" UI64FMTD "', ?)");
+    stmt.addUInt32(GetInstanceId());
+    stmt.addUInt32(GetMapId());
+    stmt.addUInt64((uint64)GetResetTimeForDB());
+    stmt.addString(data);
+    stmt.Execute();
 }
 
 void DungeonPersistentState::DeleteRespawnTimesAndData()
