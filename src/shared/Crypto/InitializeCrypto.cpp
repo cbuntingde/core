@@ -5,8 +5,6 @@
 #include "Encryption/RC4.h"
 #include "Hash/MD5.h"
 #include "Hash/SHA1.h"
-#include "IO/Filesystem/FileHandle.h"
-#include "IO/Filesystem/FileSystem.h"
 #include "Log.h"
 
 #include <openssl/crypto.h>
@@ -149,19 +147,8 @@ bool Crypto::InitializeCryptoAndPrintVersion()
         sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "OpenSSL: legacy provider is not available. Trying to load it...");
         if (!OSSL_PROVIDER_load(nullptr, "legacy"))
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "OpenSSL: legacy provider load failed. Retrying after setting CWD...");
-            std::string cwd = IO::Filesystem::ToAbsolutePath(".");
-
-            if (!OSSL_PROVIDER_set_default_search_path(nullptr, cwd.c_str()))
-            {
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "OpenSSL: failed to set provider default search path to CWD");
-            }
-
-            if (!OSSL_PROVIDER_load(nullptr, "legacy"))
-            {
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "OpenSSL: Failed to load openssl legacy provider.");
-                return false;
-            }
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "OpenSSL: Failed to load openssl legacy provider.");
+            return false;
         }
     }
 #endif
