@@ -21,6 +21,7 @@
 
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
+#include "Database/SqlPreparedStatement.h"
 #include "WorldPacket.h"
 #include "SharedDefines.h"
 #include "WorldSession.h"
@@ -822,13 +823,14 @@ void WorldSession::HandleChangePlayerNameOpcodeCallBack(std::unique_ptr<QueryRes
     ObjectGuid guid = ObjectGuid(HIGHGUID_PLAYER, guidLow);
     std::string oldname = result->Fetch()[1].GetCppString();
 
-    // The new name reaches this callback as a bound parameter, so it is still unescaped
-    // here. Escape before interpolating it into the UPDATE statement.
-    std::string escaped_newname = newname;
-    CharacterDatabase.escape_string(escaped_newname);
-
     CharacterDatabase.BeginTransaction();
-    CharacterDatabase.PExecute("UPDATE `characters` SET `name` = '%s', `character_flags` = (`character_flags` & ~ %u), `character_flags` = (`character_flags` | %u) WHERE `guid` ='%u'", escaped_newname.c_str(), uint32(CHARACTER_FLAG_RENAME), uint32(CHARACTER_FLAG_RENAME_NEEDS_GM_REVIEW), guidLow);
+    static SqlStatementID updRename;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(updRename, "UPDATE `characters` SET `name` = ?, `character_flags` = (`character_flags` & ~ ?), `character_flags` = (`character_flags` | ?) WHERE `guid` = ?");
+    stmt.addString(newname);
+    stmt.addUInt32(uint32(CHARACTER_FLAG_RENAME));
+    stmt.addUInt32(uint32(CHARACTER_FLAG_RENAME_NEEDS_GM_REVIEW));
+    stmt.addUInt32(guidLow);
+    stmt.Execute();
     CharacterDatabase.CommitTransaction();
 
     sLog.Player(session->GetAccountId(), LOG_CHAR, LOG_LVL_BASIC,

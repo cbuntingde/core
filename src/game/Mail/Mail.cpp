@@ -39,6 +39,7 @@
 #include "Item.h"
 #include "AuctionHouseMgr.h"
 #include "MasterPlayer.h"
+#include "Database/SqlPreparedStatement.h"
 
 /**
  * Creates a new MailSender object.
@@ -329,13 +330,24 @@ void MailDraft::SendMailTo(MailReceiver const& receiver, MailSender const& sende
     time_t expire_time = deliver_time + expire_delay;
 
     // Add to DB
-    std::string safe_subject = GetSubject();
-
     CharacterDatabase.BeginTransaction();
-    CharacterDatabase.escape_string(safe_subject);
-    CharacterDatabase.PExecute("INSERT INTO `mail` (`id`, `message_type`, `stationery`, `mail_template_id`, `sender_guid`, `receiver_guid`, `subject`, `item_text_id`, `has_items`, `expire_time`, `deliver_time`, `money`, `cod`, `checked`) "
-                               "VALUES ('%u', '%u', '%u', '%u', '%u', '%u', '%s', '%u', '%u', '" UI64FMTD "','" UI64FMTD "', '%u', '%u', '%u')",
-                               mailId, sender.GetMailMessageType(), sender.GetStationery(), GetMailTemplateId(), sender.GetSenderId(), receiver.GetPlayerGuid().GetCounter(), safe_subject.c_str(), GetBodyId(), (has_items ? 1 : 0), (uint64)expire_time, (uint64)deliver_time, m_money, m_COD, checked);
+    static SqlStatementID insMail;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(insMail, "INSERT INTO `mail` (`id`, `message_type`, `stationery`, `mail_template_id`, `sender_guid`, `receiver_guid`, `subject`, `item_text_id`, `has_items`, `expire_time`, `deliver_time`, `money`, `cod`, `checked`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    stmt.addUInt32(mailId);
+    stmt.addUInt32(sender.GetMailMessageType());
+    stmt.addUInt32(sender.GetStationery());
+    stmt.addUInt32(GetMailTemplateId());
+    stmt.addUInt32(sender.GetSenderId());
+    stmt.addUInt32(receiver.GetPlayerGuid().GetCounter());
+    stmt.addString(GetSubject());
+    stmt.addUInt32(GetBodyId());
+    stmt.addUInt32(has_items ? 1u : 0u);
+    stmt.addUInt64((uint64)expire_time);
+    stmt.addUInt64((uint64)deliver_time);
+    stmt.addUInt32(m_money);
+    stmt.addUInt32(m_COD);
+    stmt.addUInt32(checked);
+    stmt.Execute();
 
     for (const auto& itr : m_items)
     {

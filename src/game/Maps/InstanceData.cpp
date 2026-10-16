@@ -33,12 +33,24 @@ void InstanceData::SaveToDB()
         return;
 
     std::string data = Save();
-    CharacterDatabase.escape_string(data);
+
+    static SqlStatementID updInstance;
+    static SqlStatementID updWorld;
 
     if (instance->Instanceable())
-        CharacterDatabase.PExecute("UPDATE `instance` SET `data` = '%s' WHERE `id` = %u", data.c_str(), instance->GetInstanceId());
+    {
+        SqlStatement stmt = CharacterDatabase.CreateStatement(updInstance, "UPDATE `instance` SET `data` = ? WHERE `id` = ?");
+        stmt.addString(data);
+        stmt.addUInt32(instance->GetInstanceId());
+        stmt.Execute();
+    }
     else
-        CharacterDatabase.PExecute("UPDATE `world` SET `data` = '%s' WHERE `map` = %u", data.c_str(), instance->GetId());
+    {
+        SqlStatement stmt = CharacterDatabase.CreateStatement(updWorld, "UPDATE `world` SET `data` = ? WHERE `map` = ?");
+        stmt.addString(data);
+        stmt.addUInt32(instance->GetId());
+        stmt.Execute();
+    }
 }
 
 bool InstanceData::CheckConditionCriteriaMeet(Player const* /*player*/, uint32 map_id, WorldObject const* source, uint32 instance_condition_id) const

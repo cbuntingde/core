@@ -8004,12 +8004,13 @@ uint32 ObjectMgr::CreateItemText(std::string text)
     uint32 newItemTextId = GenerateItemTextID();
     //insert new itempage to container
     m_ItemTextsMap[ newItemTextId ] = text;
-    //save new itempage
-    CharacterDatabase.escape_string(text);
-    //any Delete query needed, itemTextId is maximum of all ids
-    std::ostringstream query;
-    query << "INSERT INTO `item_text` (`id`, `text`) VALUES ( '" << newItemTextId << "', '" << text << "')";
-    CharacterDatabase.Execute(query.str().c_str());         //needs to be run this way, because mail body may be more than 1024 characters
+    //save new itempage. Prepared statement binds `text` as a parameter, so
+    //there is no escaping or 1024-char query-length limit to worry about.
+    static SqlStatementID insItemText;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(insItemText, "INSERT INTO `item_text` (`id`, `text`) VALUES (?, ?)");
+    stmt.addUInt32(newItemTextId);
+    stmt.addString(text);
+    stmt.Execute();
     return newItemTextId;
 }
 
