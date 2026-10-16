@@ -41,7 +41,7 @@ void IO::IoContext::RunUntilShutdown()
     {
         bool isOkay = ::GetQueuedCompletionStatus(m_completionPort, &bytesWritten, &completionKey, reinterpret_cast<LPOVERLAPPED *>(&task), maxWait);
 
-        if (task)
+        if (task && task->HasCallback())
         {
             task->OnComplete(isOkay ? 0 : ::GetLastError());
         }

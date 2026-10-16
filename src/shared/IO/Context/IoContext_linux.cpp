@@ -17,6 +17,16 @@ IO::IoContext::~IoContext()
     ::close(m_epollDescriptor);
 }
 
+// The batch of events that RunUntilShutdown() is currently dispatching on this thread.
+// Only the events after `next` are still pending.
+struct DispatchBatch
+{
+    struct epoll_event* events;
+    int next;
+    int count;
+};
+static thread_local DispatchBatch* g_currentDispatchBatch = nullptr;
+
 std::unique_ptr<IO::IoContext> IO::IoContext::CreateIoContext()
 {
     // Initialize our main epoll queue
@@ -66,9 +76,13 @@ void IO::IoContext::RunUntilShutdown()
             continue;
         }
 
-        for (int i = 0; i < numEvents; i++)
+        DispatchBatch batch{events, 0, numEvents};
+        g_currentDispatchBatch = &batch;
+        while (batch.next < batch.count)
         {
-            struct epoll_event const& event = events[i];
+            struct epoll_event const& event = events[batch.next++];
+            if (event.data.ptr == nullptr)
+                continue; // The receiver was destroyed by an earlier event of this batch
 
             if (event.data.u32 == static_cast<uint32_t>(IoContextEpollTargetType::ContextSwitchRequest))
             {
@@ -90,6 +104,20 @@ void IO::IoContext::RunUntilShutdown()
                 ((SystemIoEventReceiver*)(event.data.ptr))->OnIoEvent(event.events);
             }
         }
+        g_currentDispatchBatch = nullptr;
+    }
+}
+
+void IO::IoContext::ForgetReceiverInCurrentBatch(IO::SystemIoEventReceiver const* eventReceiver)
+{
+    DispatchBatch* batch = g_currentDispatchBatch;
+    if (batch == nullptr)
+        return;
+
+    for (int i = batch->next; i < batch->count; i++)
+    {
+        if (batch->events[i].data.ptr == eventReceiver)
+            batch->events[i].data.ptr = nullptr;
     }
 }
 
