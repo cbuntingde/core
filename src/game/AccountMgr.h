@@ -124,17 +124,18 @@ class AccountMgr
         void Update(uint32 diff);
         void LoadIPBanList(std::unique_ptr<QueryResult> result, bool silent=false);
         void LoadAccountBanList(bool silent=false);
-        void BanIP(std::string const& ip, uint32 unbandate) { m_ipBanned[ip] = unbandate; }
-        void UnbanIP(std::string const& ip) { m_ipBanned.erase(ip); }
-        void BanAccount(uint32 account, uint32 unbandate) { m_accountBanned[account] = unbandate; }
-        void UnbanAccount(uint32 acc) { m_accountBanned.erase(acc); }
+        void BanIP(std::string const& ip, uint32 unbandate) { std::lock_guard<std::shared_timed_mutex> guard(m_ipBannedMutex); m_ipBanned[ip] = unbandate; }
+        void UnbanIP(std::string const& ip) { std::lock_guard<std::shared_timed_mutex> guard(m_ipBannedMutex); m_ipBanned.erase(ip); }
+        void BanAccount(uint32 account, uint32 unbandate) { std::lock_guard<std::shared_timed_mutex> guard(m_accountBannedMutex); m_accountBanned[account] = unbandate; }
+        void UnbanAccount(uint32 acc) { std::lock_guard<std::shared_timed_mutex> guard(m_accountBannedMutex); m_accountBanned.erase(acc); }
         bool IsIPBanned(std::string const& ip) const;
         bool IsAccountBanned(uint32 acc) const;
 
         void LoadAccountWarnings();
-        void WarnAccount(uint32 acc, std::string reason) { m_accountWarnings[acc] = reason; }
+        void WarnAccount(uint32 acc, std::string reason) { std::lock_guard<std::shared_timed_mutex> guard(m_accountWarningsMutex); m_accountWarnings[acc] = reason; }
         char const* GetWarningText(uint32 acc) const
         {
+            std::shared_lock<std::shared_timed_mutex> guard(m_accountWarningsMutex);
             auto itr = m_accountWarnings.find(acc);
             if (itr != m_accountWarnings.end())
                 return itr->second.c_str();
@@ -146,13 +147,16 @@ class AccountMgr
         void AddInstanceEnterTime(uint32 accountId, uint32 instanceId, time_t enterTime);
     protected:
         std::map<uint32, std::string> m_accountWarnings;
+        mutable std::shared_timed_mutex m_accountWarningsMutex;
         uint32 m_banlistUpdateTimer;
         std::map<std::string, uint32> m_ipBanned;
         mutable std::shared_timed_mutex m_ipBannedMutex;
         std::map<uint32, uint32> m_accountBanned;
+        mutable std::shared_timed_mutex m_accountBannedMutex;
         typedef std::map<uint32 /* instanceId */, time_t /* enter time */> InstanceEnterTimesMap;
         typedef std::map<uint32 /* accountId */, InstanceEnterTimesMap> AccountInstanceEnterTimesMap;
         AccountInstanceEnterTimesMap m_instanceEnterTimes;
+        mutable std::shared_timed_mutex m_instanceEnterTimesMutex;
         std::map<uint32, AccountPersistentData> m_accountPersistentData;
         std::shared_timed_mutex m_accountPersistentDataMutex;
 };
