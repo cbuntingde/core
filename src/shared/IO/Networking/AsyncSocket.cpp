@@ -34,9 +34,16 @@ IO::Networking::AsyncSocket::~AsyncSocket()
         return; // Ignore destructor
 
     sLog.Out(LOG_NETWORK, LOG_LVL_DEBUG, "[%s] Destructor called ~AsyncSocket: No references left", GetRemoteIpString().c_str());
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    // A read event that closed the socket can be followed by a write event for it in the same kqueue batch
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__linux__)
+    // A read event that closed the socket can be followed by a write event for it in the same epoll/kqueue batch
     IO::IoContext::ForgetReceiverInCurrentBatch(this);
+#endif
+#if defined(WIN32)
+    // Invalidate any pending IOCP task callbacks so a late completion for this
+    // socket (already in the queue) is skipped instead of invoking a freed task.
+    m_currentContextTask.Invalidate();
+    m_currentWriteTask.Invalidate();
+    m_currentReadTask.Invalidate();
 #endif
     m_descriptor.CloseSocket(); // <-- This will actually close the socket and release the file descriptor to the kernel
 

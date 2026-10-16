@@ -42,6 +42,9 @@ namespace IO
             m_callback(errorCode);
         }
 
+        bool HasCallback() const { return m_callback != nullptr; }
+        void Invalidate() { m_callback = nullptr; }
+
         std::function<void(DWORD errorCode)> m_callback = nullptr;
     };
 
