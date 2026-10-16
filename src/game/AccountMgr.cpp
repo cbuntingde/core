@@ -403,19 +403,22 @@ void AccountMgr::LoadAccountBanList(bool silent)
         return;
     }
 
-    m_accountBanned.clear();
-    std::unique_ptr<BarGoLink> bar = silent ? nullptr : std::make_unique<BarGoLink>(banresult->GetRowCount());
-    do
     {
-        if (bar)
-            bar->step();
-        Field* fields = banresult->Fetch();
-        uint32 unbandate = fields[1].GetUInt32();
-        uint32 bandate = fields[2].GetUInt32();
-        if (unbandate == bandate)
-            unbandate = 0xFFFFFFFF;
-        m_accountBanned[fields[0].GetUInt32()] = unbandate;
-    } while (banresult->NextRow());
+        std::lock_guard<std::shared_timed_mutex> lock(m_accountBannedMutex);
+        m_accountBanned.clear();
+        std::unique_ptr<BarGoLink> bar = silent ? nullptr : std::make_unique<BarGoLink>(banresult->GetRowCount());
+        do
+        {
+            if (bar)
+                bar->step();
+            Field* fields = banresult->Fetch();
+            uint32 unbandate = fields[1].GetUInt32();
+            uint32 bandate = fields[2].GetUInt32();
+            if (unbandate == bandate)
+                unbandate = 0xFFFFFFFF;
+            m_accountBanned[fields[0].GetUInt32()] = unbandate;
+        } while (banresult->NextRow());
+    }
 
     if (!silent)
     {
@@ -433,6 +436,7 @@ bool AccountMgr::IsIPBanned(std::string const& ip) const
 
 bool AccountMgr::IsAccountBanned(uint32 acc) const
 {
+    std::shared_lock<std::shared_timed_mutex> lock(m_accountBannedMutex);
     std::map<uint32, uint32>::const_iterator it = m_accountBanned.find(acc);
     return !(it == m_accountBanned.end() || it->second < time(nullptr));
 }
@@ -444,22 +448,26 @@ void AccountMgr::LoadAccountWarnings()
     if (!result)
         return;
 
-    m_accountWarnings.clear();
-    do
     {
-        Field* fields = result->Fetch();
-        std::string warning = fields[1].GetCppString();
-        m_accountWarnings[fields[0].GetUInt32()] = warning.substr(5, warning.size() - 5);
-    } while (result->NextRow());
+        std::lock_guard<std::shared_timed_mutex> lock(m_accountWarningsMutex);
+        m_accountWarnings.clear();
+        do
+        {
+            Field* fields = result->Fetch();
+            std::string warning = fields[1].GetCppString();
+            m_accountWarnings[fields[0].GetUInt32()] = warning.substr(5, warning.size() - 5);
+        } while (result->NextRow());
+    }
 }
 
 bool AccountMgr::CheckInstanceCount(uint32 accountId, uint32 instanceId, uint32 maxCount)
 {
+    std::shared_lock<std::shared_timed_mutex> lock(m_instanceEnterTimesMutex);
     AccountInstanceEnterTimesMap::iterator it = m_instanceEnterTimes.find(accountId);
     if (it == m_instanceEnterTimes.end())
         return true;
-    InstanceEnterTimesMap& enterTimes = it->second;
-    InstanceEnterTimesMap::iterator it2 = enterTimes.find(instanceId);
+    InstanceEnterTimesMap const& enterTimes = it->second;
+    InstanceEnterTimesMap::const_iterator it2 = enterTimes.find(instanceId);
     if (it2 != enterTimes.end())
         return true;
     if (enterTimes.size() < maxCount)
@@ -467,15 +475,13 @@ bool AccountMgr::CheckInstanceCount(uint32 accountId, uint32 instanceId, uint32 
     time_t now = time(nullptr);
     for (it2 = enterTimes.begin(); it2 != enterTimes.end(); ++it2)
         if (it2->second + 3600 < now)
-        {
-            enterTimes.erase(it2);
             return true;
-        }
     return false;
 }
 
 void AccountMgr::AddInstanceEnterTime(uint32 accountId, uint32 instanceId, time_t enterTime)
 {
+    std::lock_guard<std::shared_timed_mutex> lock(m_instanceEnterTimesMutex);
     AccountInstanceEnterTimesMap::iterator it = m_instanceEnterTimes.find(accountId);
     if (it == m_instanceEnterTimes.end())
     {
