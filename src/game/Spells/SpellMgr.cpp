@@ -3976,7 +3976,7 @@ void SpellMgr::LoadSpell(Field* fields)
         case SPELL_AURA_PERIODIC_MANA_LEECH:
         case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
         case SPELL_AURA_POWER_BURN_MANA:
-            if (spell->EffectAmplitude[i] == 0 && !(spell->procFlags & PROC_FLAG_HEARTBEAT))
+            if (spell->EffectAmplitude[i] == 0)
                 spell->EffectAmplitude[i] = 5000;
             break;
         }
