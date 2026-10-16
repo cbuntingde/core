@@ -281,7 +281,7 @@ struct boss_victor_nefariusAI : ScriptedAI
             uint32 scepterRunResult = FAIL;
 
             // Check for successful Scepter Shard Run
-            if (scepterRun)
+            if (scepterRun && scepterRunTime > 0)
             {
                 // Check if still has time left
                 if (Player* scepterChampion = m_creature->GetMap()->GetPlayer(m_pInstance->GetData64(DATA_SCEPTER_CHAMPION)))
