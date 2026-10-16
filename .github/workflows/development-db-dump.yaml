@@ -5,12 +5,6 @@ on:
   push:
     branches:
       - development
-    paths:
-      - '.github/scripts/export-and-verify-sql-dumps.sh'
-      - '.github/scripts/prepare-sql-test-environment.sh'
-      - '.github/scripts/publish-moving-release.sh'
-      - '.github/workflows/development-db-dump.yaml'
-      - '**/*.sql'
 
 env:
   WORLD_DB_ARCHIVE: world_full_14_june_2021
@@ -42,6 +36,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      - name: Install 7z
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends p7zip-full
 
       - name: Prepare SQL test environment
         env:
