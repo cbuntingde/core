@@ -18,7 +18,7 @@ target_include_directories(vmangos_tests PRIVATE
 
 target_link_libraries(vmangos_tests PRIVATE
     shared
-    ${MYSQL_LIBRARY}
+    ${MYSQL_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${ZLIB_LIBRARIES}
 )
@@ -28,6 +28,6 @@ if(WIN32)
   target_compile_options(vmangos_tests PRIVATE /bigobj /EHsc)
 else()
   find_package(Threads)
-  target_link_libraries(vmangos_tests PRIVATE ${CMAKE_THREAD_LIBS_INIT} ${ZLIB_LIBRARIES})
+  target_link_libraries(vmangos_tests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
   target_compile_options(vmangos_tests PRIVATE -Wall -Wextra -std=c++14)
 endif()

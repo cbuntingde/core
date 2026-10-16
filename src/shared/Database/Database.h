@@ -60,9 +60,10 @@ class SqlConnection
         virtual bool Execute(std::string const& sql) = 0;
 
         //escape string generation
-        // DEPRECATED: Use prepared statements (SqlStatement) instead. Escaping user input
-        // before interpolating it into SQL is error-prone and the source of injection bugs.
-        virtual unsigned long escape_string(char* to, char const* from, unsigned long length) [[deprecated("Use prepared statements (SqlStatement) instead")]] { strncpy(to,from,length); return length; }
+        // NOTE: Prefer prepared statements (SqlStatement) over escaping user input
+        // before interpolating it into SQL. Escaping is error-prone and the source
+        // of injection bugs; new code should use SqlStatement instead.
+        virtual unsigned long escape_string(char* to, char const* from, unsigned long length) { strncpy(to,from,length); return length; }
 
         // nothing do if DB not support transactions
         virtual bool BeginTransaction() { return true; }
@@ -255,9 +256,10 @@ class Database
         operator bool () const { return !m_pQueryConnections.empty() && m_pAsyncConn != 0; }
 
         //escape string generation
-        // DEPRECATED: Use prepared statements (SqlStatement) instead. Escaping user input
-        // before interpolating it into SQL is error-prone and the source of injection bugs.
-        void escape_string(std::string& str) [[deprecated("Use prepared statements (SqlStatement) instead")]];
+        // NOTE: Prefer prepared statements (SqlStatement) over escaping user input
+        // before interpolating it into SQL. Escaping is error-prone and the source
+        // of injection bugs; new code should use SqlStatement instead.
+        void escape_string(std::string& str);
 
         // must be called before first query in thread (one time for thread using one from existing Database objects)
         virtual void ThreadStart();

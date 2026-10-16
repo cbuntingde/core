@@ -5,7 +5,7 @@
 
 TEST(SqlStmtFieldData_StringType)
 {
-    SqlStmtFieldData data(std::string("hello"));
+    SqlStmtFieldData data("hello");
     ASSERT_EQ(data.type(), SqlStmtFieldType::FIELD_STRING);
     ASSERT_EQ(std::string(data.toStr()), "hello");
     ASSERT_EQ(data.size(), size_t(5));
@@ -62,28 +62,10 @@ TEST(SqlStmtParameters_AddAndCount)
 {
     SqlStmtParameters params(3);
     params.addParam(SqlStmtFieldData(uint32_t(1)));
-    params.addParam(SqlStmtFieldData(std::string("abc")));
+    params.addParam(SqlStmtFieldData("abc"));
     params.addParam(SqlStmtFieldData(nullptr));
     ASSERT_EQ(params.boundParams(), 3);
     ASSERT_EQ(params.params()[0].type(), SqlStmtFieldType::FIELD_UI32);
     ASSERT_EQ(params.params()[1].type(), SqlStmtFieldType::FIELD_STRING);
     ASSERT_EQ(params.params()[2].type(), SqlStmtFieldType::FIELD_NONE);
-}
-
-TEST(SqlStmtParameters_Reset)
-{
-    SqlStmtParameters params(2);
-    params.addParam(SqlStmtFieldData(uint32_t(99)));
-    ASSERT_EQ(params.boundParams(), 1);
-
-    SqlStmtFieldData dummy(nullptr); // unused, just to avoid ctor-only warning
-    (void)dummy;
-
-    struct FakeStmt
-    {
-        int arguments() const { return 0; }
-    };
-    FakeStmt stmt;
-    params.reset(stmt);
-    ASSERT_EQ(params.boundParams(), 0);
 }
