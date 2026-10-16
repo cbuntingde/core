@@ -4,6 +4,7 @@ name: CI Build
 
 on:
   push:
+    branches: [development]
     paths-ignore:
       - '.github/ISSUE_TEMPLATE.md'
       - '.github/ISSUE_TEMPLATE/**'
@@ -17,6 +18,7 @@ on:
       - 'sql/**'
 
   pull_request:
+    branches: [development]
     paths-ignore:
       - '.github/ISSUE_TEMPLATE.md'
       - '.github/ISSUE_TEMPLATE/**'
@@ -35,11 +37,16 @@ jobs:
     runs-on: ${{ matrix.config.os }}
     permissions:
       contents: read
+    # One failing client build shouldn't cancel the rest of the matrix.
     strategy:
+      fail-fast: false
       matrix:
         # Every supported client build is verified against Ubuntu GCC; the
         # latest (1.12.1.5875) additionally runs against Ubuntu Clang, Windows
         # Visual Studio, and Windows MinGW (added via include below).
+        # On pull requests we only build the latest client build (5875) on
+        # Ubuntu GCC and Ubuntu Clang to keep the matrix small; the full
+        # matrix still runs on pushes to development.
         client_build:
           - 5875
           - 5464
@@ -78,6 +85,13 @@ jobs:
               os: windows-2022
               job_name: Windows MinGW
               use_mingw: true
+    # On pull requests, skip older client builds and macOS/Windows entirely;
+    # only build 5875 on Ubuntu GCC and Ubuntu Clang.
+    if: |
+      github.event_name != 'pull_request' ||
+      (matrix.client_build == 5875 &&
+        (matrix.config.job_name == 'Ubuntu GCC' ||
+         matrix.config.job_name == 'Ubuntu Clang & PCH OFF'))
 
     steps:
       - name: Check out repository
