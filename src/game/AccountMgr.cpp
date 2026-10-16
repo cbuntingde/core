@@ -60,12 +60,12 @@ AccountOpResult AccountMgr::CreateAccount(std::string username, std::string pass
     std::string s_hex = srp.GetSalt().AsHexStr();
     std::string v_hex = srp.GetVerifier().AsHexStr();
 
-    std::string safe_username = username;
-    LoginDatabase.escape_string(safe_username);
-
-    bool update_sv = LoginDatabase.PExecute(
-        "INSERT INTO account(`username`, `v`, `s`, `joindate`) VALUES('%s','%s','%s',NOW())",
-        safe_username.c_str(), v_hex.c_str(), s_hex.c_str());
+    static SqlStatementID insAccount;
+    SqlStatement stmt = LoginDatabase.CreateStatement(insAccount, "INSERT INTO account(`username`, `v`, `s`, `joindate`) VALUES(?, ?, ?, NOW())");
+    stmt.addString(username);
+    stmt.addString(v_hex);
+    stmt.addString(s_hex);
+    bool update_sv = stmt.Execute();
 
     if (!update_sv)
         return AOR_DB_INTERNAL_ERROR;                       // unexpected error
@@ -135,15 +135,16 @@ AccountOpResult AccountMgr::ChangeUsername(uint32 accid, std::string new_uname, 
 
     srp.CalculateVerifier(CalculateShaPassHash(new_uname, new_passwd));
 
-    std::string safe_new_uname = new_uname;
-    LoginDatabase.escape_string(safe_new_uname);
-
     std::string s_hex = srp.GetSalt().AsHexStr();
     std::string v_hex = srp.GetVerifier().AsHexStr();
 
-    bool update_sv = LoginDatabase.PExecute(
-        "UPDATE `account` SET `v`='%s', `s`='%s', `username`='%s' WHERE `id`='%u'",
-        v_hex.c_str(), s_hex.c_str(), safe_new_uname.c_str(), accid);
+    static SqlStatementID updAccount;
+    SqlStatement stmt = LoginDatabase.CreateStatement(updAccount, "UPDATE `account` SET `v` = ?, `s` = ?, `username` = ? WHERE `id` = ?");
+    stmt.addString(v_hex);
+    stmt.addString(s_hex);
+    stmt.addString(new_uname);
+    stmt.addUInt32(accid);
+    bool update_sv = stmt.Execute();
 
     if (!update_sv)
         return AOR_DB_INTERNAL_ERROR;                       // unexpected error

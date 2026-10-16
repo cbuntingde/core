@@ -366,24 +366,30 @@ void Petition::BuildSignatureData(WorldPacket& data) const
 
 bool Petition::Rename(std::string const& newname)
 {
-    std::string db_newname = newname;
-    CharacterDatabase.escape_string(db_newname);
-    CharacterDatabase.PExecute("UPDATE `petition` SET `name` = '%s' WHERE `petition_guid` = '%u'",
-        db_newname.c_str(), m_id);
+    static SqlStatementID updPetition;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(updPetition, "UPDATE `petition` SET `name` = ? WHERE `petition_guid` = ?");
+    stmt.addString(newname);
+    stmt.addUInt32(m_id);
+    bool update_sv = stmt.Execute();
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Petition %u renamed to '%s'", m_id, newname.c_str());
+    if (update_sv)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Petition %u renamed to '%s'", m_id, newname.c_str());
+        m_name = newname;
+    }
 
-    m_name = newname;
-
-    return true;
+    return update_sv;
 }
 
 void Petition::SaveToDB()
 {
-    std::string escaped_name = m_name;
-    CharacterDatabase.escape_string(escaped_name);
-    CharacterDatabase.PExecute("INSERT INTO `petition` (`owner_guid`, `petition_guid`, `charter_guid`, `name`) VALUES ('%u', '%u', '%u', '%s')",
-        m_ownerGuid.GetCounter(), m_id, m_charterGuid.GetCounter(), escaped_name.c_str());
+    static SqlStatementID insPetition;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(insPetition, "INSERT INTO `petition` (`owner_guid`, `petition_guid`, `charter_guid`, `name`) VALUES (?, ?, ?, ?)");
+    stmt.addUInt32(m_ownerGuid.GetCounter());
+    stmt.addUInt32(m_id);
+    stmt.addUInt32(m_charterGuid.GetCounter());
+    stmt.addString(m_name);
+    stmt.Execute();
 }
 
 PetitionSignature* Petition::GetSignatureForPlayer(Player* player)
