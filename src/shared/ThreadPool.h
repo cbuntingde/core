@@ -160,7 +160,7 @@ private:
 
         int id;
         ErrorHandling errorHandling;
-        volatile bool busy = false;
+        std::atomic<bool> busy = false;
         ThreadPool *pool;
         std::thread thread;
         Callable pre, post;

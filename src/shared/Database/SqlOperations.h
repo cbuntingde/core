@@ -55,10 +55,10 @@ class SqlOperation
 class SqlPlainRequest : public SqlOperation
 {
     private:
-        char const* m_sql;
+        std::string m_sql;
     public:
-        SqlPlainRequest(char const* sql) : m_sql(mangos_strdup(sql)){}
-        ~SqlPlainRequest() { char* tofree = const_cast<char*>(m_sql); delete [] tofree; }
+        SqlPlainRequest(char const* sql) : m_sql(sql){}
+        ~SqlPlainRequest() = default;
         bool Execute(SqlConnection* conn);
 };
 
@@ -115,13 +115,13 @@ class SqlResultQueue : public LockedQueue<MaNGOS::IQueryCallback* , std::mutex>
 class SqlQuery : public SqlOperation
 {
     private:
-        char const* m_sql;
+        std::string m_sql;
         MaNGOS::IQueryCallback* m_callback;
         SqlResultQueue* m_queue;
     public:
         SqlQuery(char const* sql, MaNGOS::IQueryCallback* callback, SqlResultQueue* queue)
-            : m_sql(mangos_strdup(sql)), m_callback(callback), m_queue(queue) {}
-        ~SqlQuery() { char* tofree = const_cast<char*>(m_sql); delete [] tofree; }
+            : m_sql(sql), m_callback(callback), m_queue(queue) {}
+        ~SqlQuery() = default;
         bool Execute(SqlConnection* conn);
 };
 
