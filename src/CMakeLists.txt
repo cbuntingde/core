@@ -33,5 +33,5 @@ if(USE_SCRIPTS)
 endif()
 
 if(BUILD_TESTS)
-  add_subdirectory(test)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/test ${CMAKE_BINARY_DIR}/test)
 endif()

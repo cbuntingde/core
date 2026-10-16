@@ -39,8 +39,8 @@ inline TestRegistry& GetRegistry()
     return reg;
 }
 
-inline int g_failures = 0;
-inline int g_assertions = 0;
+extern int g_failures;
+extern int g_assertions;
 
 #define TEST(name) \
     static void name##_fn(); \
@@ -105,6 +105,8 @@ inline std::string ToString(long v) { return std::to_string(v); }
 inline std::string ToString(unsigned long v) { return std::to_string(v); }
 inline std::string ToString(long long v) { return std::to_string(v); }
 inline std::string ToString(unsigned long long v) { return std::to_string(v); }
+inline std::string ToString(float v) { return std::to_string(v); }
+inline std::string ToString(double v) { return std::to_string(v); }
 inline std::string ToString(bool v) { return v ? "true" : "false"; }
 inline std::string ToString(char const* v) { return v ? v : "null"; }
 inline std::string ToString(std::string const& v) { return v; }

@@ -36,3 +36,16 @@ Remaining `escape_string` call sites still exist in `Commands/*`, `Guild/Guild.c
 - `.github/workflows/sanitizers.yaml` — ASan+UBSan and TSan builds on Linux (push + PR).
 - `.github/workflows/pr-sql-check.yaml` — SQL dump validation on PRs (not enforced as a required status check).
 - `plan.md` (untracked in repo root) tracks the remediation roadmap: SQL injection, concurrency, socket lifetime, smart-pointer adoption, C++17/20 bump.
+
+### Commit — CI: fix sanitizers build configure + test compilation
+The `sanitizers.yaml` CI was failing on **every** run (including the base `development` branch without any of these changes) — a pre-existing breakage, not caused by the security fixes. Root causes and fixes:
+
+1. **`src/CMakeLists.txt:36`** — `add_subdirectory(test)` resolved to `src/test/`, which doesn't exist. The actual test suite lives at root `test/` (tracked: `CMakeLists.txt`, `TestFramework.h`, `TestMain.cpp`, `DatabaseTests.cpp`). Changed to `add_subdirectory(${CMAKE_SOURCE_DIR}/test ${CMAKE_BINARY_DIR}/test)` with an explicit binary dir (required when the source is outside the current source tree).
+
+2. **`test/TestFramework.h`** — `inline int g_failures` / `inline int g_assertions` are C++17 inline variables; the project is C++14. Changed to `extern` declarations with definitions in `TestMain.cpp`. Added missing `ToString(float)` / `ToString(double)` overloads (needed by `ASSERT_EQ(data.toFloat(), 3.14f)`).
+
+3. **`test/TestMain.cpp`** — Added definitions for the now-`extern` counters, plus `char const* g_mainLogFileName` (referenced by `shared/Log.cpp`, defined per-binary in `mangosd`/`realmd` Main.cpp but needed by the test binary).
+
+4. **`test/CMakeLists.txt`** — Added `framework` to `target_link_libraries` (provides `MaNGOS::at_exit` from `ObjectLifeTime.cpp`).
+
+After these fixes, cmake configure passes with `-DBUILD_TESTS=ON` and the `vmangos_tests` target compiles cleanly (verified locally with MSVC `/Wall`; Linux sanitizers CI not runnable locally).

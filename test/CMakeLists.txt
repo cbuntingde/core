@@ -18,6 +18,7 @@ target_include_directories(vmangos_tests PRIVATE
 
 target_link_libraries(vmangos_tests PRIVATE
     shared
+    framework
     ${MYSQL_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${ZLIB_LIBRARIES}
