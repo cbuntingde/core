@@ -1,0 +1,100 @@
+# Sanitizer builds + unit tests (Linux)
+# Runs AddressSanitizer, UndefinedBehaviorSanitizer, and ThreadSanitizer
+# builds to catch memory, UB, and data-race bugs introduced by changes.
+name: Sanitizer Builds and Tests
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    branches: [ development ]
+
+env:
+  BUILD_TYPE: Debug
+  CMAKE_BUILD_TYPE: Debug
+
+jobs:
+  asan:
+    name: AddressSanitizer + UBSan
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:5.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libmysqlclient-dev libssl-dev zlib1g-dev git make ninja-build
+
+      - name: Configure (ASan + UBSan)
+        run: |
+          cmake -S . -B build/san \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTS=ON \
+            -DUSE_PCH=OFF \
+            -DENABLE_CPPTRACE=OFF \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build (ASan + UBSan)
+        run: |
+          cmake --build build/san -j$(nproc)
+
+      - name: Run unit tests (ASan + UBSan)
+        run: |
+          cd build/san && ./test/vmangos_tests
+
+  tsan:
+    name: ThreadSanitizer
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:5.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang libmysqlclient-dev libssl-dev zlib1g-dev git make ninja-build
+
+      - name: Configure (TSan)
+        run: |
+          cmake -S . -B build/tsan \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTS=ON \
+            -DUSE_PCH=OFF \
+            -DENABLE_CPPTRACE=OFF \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
+
+      - name: Build (TSan)
+        run: |
+          cmake --build build/tsan -j$(nproc)
+
+      - name: Run unit tests (TSan)
+        run: |
+          cd build/tsan && ./test/vmangos_tests
