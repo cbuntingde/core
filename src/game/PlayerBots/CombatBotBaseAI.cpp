@@ -2231,6 +2231,10 @@ Unit* CombatBotBaseAI::SelectAttackerDifferentFrom(Unit const* pExcept) const
 
 bool CombatBotBaseAI::IsValidBuffTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
+    // Never buff corpses: the cast would fizzle on a dead target.
+    if (!pTarget->IsAlive())
+        return false;
+
     std::vector<uint32> morePowerfulSpells;
     sSpellMgr.ListMorePowerfulSpells(pSpellEntry->Id, morePowerfulSpells);
 

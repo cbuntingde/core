@@ -33,6 +33,13 @@ struct BotHealer
     // health percent wins; on exactly equal health a tank replaces a
     // non-tank. Anything else keeps the incumbent, which keeps the pick
     // stable tick to tick for identical input.
+    // Resurrection order: the healer first, then the tank, then the rest.
+    // The group recovers fastest when its healer stands up first.
+    static unsigned RezRank(bool isHealer, bool isTank)
+    {
+        return isHealer ? 0u : (isTank ? 1u : 2u);
+    }
+
     static bool WantsTriageTarget(float healthPercent, bool isTank, float bestHealth, bool bestIsTank)
     {
         if (healthPercent < bestHealth)

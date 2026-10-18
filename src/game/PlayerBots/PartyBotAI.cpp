@@ -16,6 +16,8 @@
 
 #include "PartyBotAI.h"
 #include "BotDungeon.h"
+#include "BotHealer.h"
+#include "BotPerf.h"
 #include "Player.h"
 #include "CreatureAI.h"
 #include "MotionMaster.h"
@@ -522,6 +524,12 @@ Player* PartyBotAI::SelectResurrectionTarget() const
         return nullptr;
 
     Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return nullptr;
+
+    // Rez the healer first, then the tank: the group recovers fastest.
+    Player* pTarget = nullptr;
+    unsigned bestRank = 3u;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         if (Player* pMember = itr->getSource())
@@ -536,12 +544,19 @@ Player* PartyBotAI::SelectResurrectionTarget() const
             if (!me->IsWithinLOSInMap(pMember))
                 continue;
 
-            if (m_resurrectionSpell->IsTargetInRange(me, pMember))
-                return pMember;
+            if (!m_resurrectionSpell->IsTargetInRange(me, pMember))
+                continue;
+
+            unsigned const rank = BotHealer::RezRank(IsHealerClass(pMember->GetClass()), IsTankClass(pMember->GetClass()));
+            if (rank < bestRank)
+            {
+                bestRank = rank;
+                pTarget = pMember;
+            }
         }
     }
 
-    return nullptr;
+    return pTarget;
 }
 
 Player* PartyBotAI::SelectShieldTarget() const
@@ -712,11 +727,24 @@ void PartyBotAI::OnPlayerLogin()
         me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
 }
 
+uint32 PartyBotAI::TickIntervalMs() const
+{
+    uint32 interval = m_personality.TickIntervalMs();
+    // LOD: out-of-combat bots far from the leader think slower. In combat
+    // and near the action every bot stays full-rate.
+    if (!me->IsInCombat())
+    {
+        if (Player const* pLeader = GetPartyLeader())
+            interval *= BotPerf::OutOfCombatStride(me->GetDistance(pLeader));
+    }
+    return interval;
+}
+
 void PartyBotAI::UpdateAI(uint32 const diff)
 {
     m_updateTimer.Update(diff);
     if (m_updateTimer.Passed())
-        m_updateTimer.Reset(m_personality.TickIntervalMs());
+        m_updateTimer.Reset(TickIntervalMs());
     else
         return;
 

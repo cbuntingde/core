@@ -27,6 +27,14 @@ TEST(BotHealer_TankBreaksHealthTie)
     ASSERT_FALSE(BotHealer::WantsTriageTarget(50.0f, true, 50.0f, true));
 }
 
+TEST(BotHealer_RezRankHealerFirst)
+{
+    ASSERT_EQ(BotHealer::RezRank(true, false), 0u);
+    ASSERT_EQ(BotHealer::RezRank(true, true), 0u);
+    ASSERT_EQ(BotHealer::RezRank(false, true), 1u);
+    ASSERT_EQ(BotHealer::RezRank(false, false), 2u);
+}
+
 TEST(BotHealer_PickStaysStableForIdenticalInput)
 {
     // Equal non-tanks keep the incumbent: no tick-to-tick flapping.

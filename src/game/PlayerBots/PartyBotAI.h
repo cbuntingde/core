@@ -66,6 +66,7 @@ public:
     Unit* GetDistancingTarget(Unit* pEnemy);
     bool RunAwayFromTarget(Unit* pEnemy);
     bool SpreadFromGroupmates();
+    uint32 TickIntervalMs() const;
     bool CrowdControlMarkedTargets();
     bool AcceptsTarget(Unit const* pTarget, BotTargetSource source) const;
     void ReturnToHoldAnchor();

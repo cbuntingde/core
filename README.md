@@ -19,6 +19,8 @@ what players type in game, and fully tested builds.
   only sit down to eat and drink when nobody is fighting.
 - Battleground mages now sheep the extra attacker instead of the target
   everyone is already hitting.
+- Rogues and druids strike from stealth when they can.
+- If the group falls, bots bring the healer back first, then the tank.
 - In Warsong Gulch, bots play positions: some guard the flag room while
   others attack, escort the carrier, chase the thief, or recover a
   dropped flag.
@@ -49,6 +51,7 @@ what players type in game, and fully tested builds.
 ## Still to come
 
 - Bots that step out of fire and other battlefield hazards.
+- Open-world bots with routines of their own: travel, professions, rest.
 
 ## How to play
 
