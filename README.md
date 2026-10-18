@@ -12,8 +12,8 @@ what players type in game, and fully tested builds.
   closely or at a distance, hold position, stay quiet unless attacked,
   help again, attack your target, mark targets to focus or
   crowd-control, and come to you.
-- Set each bot's pace: relaxed bots react slower and let more enemy
-  spells through, steady bots play like an average groupmate, sharp bots
+- Set each bot's pace: casual bots react slower and let more enemy
+  spells through, normal bots play like an average groupmate, sharp bots
   contest every cast and shake off everything they can.
 - Healer bots watch the whole group and treat the most hurt first. Bots
   only sit down to eat and drink when nobody is fighting.
@@ -25,10 +25,10 @@ what players type in game, and fully tested builds.
   others attack, escort the carrier, chase the thief, or recover a
   dropped flag.
 - In Arathi Basin, bots spread across the banners and fight for their
-  own. In Alterac Valley, some hold threatened points while the rest
-  attack.
-- Dungeon fighters keep their distance from each other instead of
-  piling up, and focus the marked target when there is one.
+  own. In Alterac Valley, some defend while the rest attack.
+- Ranged fighters and healers keep their distance from each other
+  instead of piling up, and bots focus the marked target when there
+  is one.
 - The download includes an optional add-on that adds the clickable
   panel; its own readme explains how to switch it on.
 
@@ -37,10 +37,10 @@ what players type in game, and fully tested builds.
 - The encryption the server needs to talk to game clients loads only
   from its proper installed location. If it is missing, the server
   refuses to start instead of risking a tampered copy.
-- Things you type in game (mail, pet and character names, bans, saved
-  dungeons) travel to the database separately from the command itself,
-  so hostile input can't hijack the command. The same protection is on
-  its way to the remaining search boxes.
+- Things you type in game (mail, pet and character names, bans,
+  saved dungeons, guild notes, searches) travel to the database
+  separately from the command itself, so hostile input can't hijack
+  the command.
 
 ## Tested builds
 
