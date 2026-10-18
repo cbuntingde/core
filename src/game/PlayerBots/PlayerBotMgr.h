@@ -5,6 +5,7 @@
 #include "Policies/Singleton.h"
 #include "Database/DatabaseEnv.h"
 #include "PlayerBotAI.h"
+#include "BotPersonality.h"
 #include "BattleGroundDefines.h"
 
 #include <vector>
@@ -89,6 +90,8 @@ class PlayerBotMgr
 
         void AddBattleBot(BattleGroundQueueTypeId queueType, Team botTeam, uint32 botLevel, bool temporary);
         void DeleteBattleBots();
+        // Sets the skill profile on every battle bot; returns false when there are none.
+        bool SetBattleBotSkill(BotSkill skill);
 
         void DeleteAll();
         void AddAllBots();

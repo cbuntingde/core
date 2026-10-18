@@ -10580,8 +10580,16 @@ bool ObjectMgr::AddGameTele(GameTele& tele)
 
     m_GameTeleMap[new_id] = tele;
 
-    return WorldDatabase.PExecuteLog("INSERT INTO `game_tele` (`id`, `position_x`, `position_y`, `position_z`, `orientation`, `map`, `name`) VALUES (%u,%f,%f,%f,%f,%u,'%s')",
-                                     new_id, tele.x, tele.y, tele.z, tele.o, tele.mapId, tele.name.c_str());
+    static SqlStatementID insTele;
+    SqlStatement teleStmt = WorldDatabase.CreateStatement(insTele, "INSERT INTO `game_tele` (`id`, `position_x`, `position_y`, `position_z`, `orientation`, `map`, `name`) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    teleStmt.addUInt32(new_id);
+    teleStmt.addFloat(tele.x);
+    teleStmt.addFloat(tele.y);
+    teleStmt.addFloat(tele.z);
+    teleStmt.addFloat(tele.o);
+    teleStmt.addUInt32(tele.mapId);
+    teleStmt.addString(tele.name);
+    return teleStmt.Execute();
 }
 
 bool ObjectMgr::DeleteGameTele(std::string const& name)
@@ -10598,7 +10606,10 @@ bool ObjectMgr::DeleteGameTele(std::string const& name)
     {
         if (itr->second.wnameLow == wname)
         {
-            WorldDatabase.PExecuteLog("DELETE FROM `game_tele` WHERE `name` = '%s'", itr->second.name.c_str());
+            static SqlStatementID delTele;
+            SqlStatement delTeleStmt = WorldDatabase.CreateStatement(delTele, "DELETE FROM `game_tele` WHERE `name` = ?");
+            delTeleStmt.addString(itr->second.name);
+            delTeleStmt.Execute();
             m_GameTeleMap.erase(itr);
             return true;
         }

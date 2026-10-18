@@ -20,6 +20,8 @@
 #include <deque>
 #include <cstdio>
 
+using namespace std;
+
 ArchiveSet gOpenArchives;
 
 MPQArchive::MPQArchive(const char* filename)

@@ -23,6 +23,8 @@
 
 #include <cstdio>
 
+using namespace std;
+
 DBCFile::DBCFile(const std::string& filename) : filename(filename)
 {
     data = NULL;

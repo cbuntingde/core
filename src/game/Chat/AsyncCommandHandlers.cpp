@@ -331,6 +331,17 @@ void PlayerCharacterLookupDisplayTask::operator()()
 }
 
 // Handle the result and create a display task to run in the world update
+// Prepared-holder twin: takes the staged result out of a PlayerSearchQueryHolder and forwards.
+void PlayerSearchHandler::HandlePlayerCharacterLookupResult(std::unique_ptr<QueryResult>, SqlQueryHolder* holder)
+{
+    PlayerSearchQueryHolder* lookup = static_cast<PlayerSearchQueryHolder*>(holder);
+    std::unique_ptr<QueryResult> result = holder->TakeResult(0);
+    uint32 accountId = lookup->GetAccountId();
+    uint32 limit = lookup->GetLimit();
+    delete holder;
+    HandlePlayerCharacterLookupResult(std::move(result), accountId, limit);
+}
+
 void PlayerSearchHandler::HandlePlayerCharacterLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit)
 {
     sWorld.AddAsyncTask(PlayerCharacterLookupDisplayTask(std::move(result), accountId, limit));
@@ -427,6 +438,17 @@ void AccountSearchDisplayTask::operator ()()
     AccountSearchHandler::ShowAccountListHelper(std::move(result), cHandler, count, limit, true);
 }
 
+// Prepared-holder twin: takes the staged result out of a PlayerSearchQueryHolder and forwards.
+void AccountSearchHandler::HandleAccountLookupResult(std::unique_ptr<QueryResult>, SqlQueryHolder* holder)
+{
+    PlayerSearchQueryHolder* lookup = static_cast<PlayerSearchQueryHolder*>(holder);
+    std::unique_ptr<QueryResult> result = holder->TakeResult(0);
+    uint32 accountId = lookup->GetAccountId();
+    uint32 limit = lookup->GetLimit();
+    delete holder;
+    HandleAccountLookupResult(std::move(result), accountId, limit);
+}
+
 void AccountSearchHandler::HandleAccountLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit)
 {
     sWorld.AddAsyncTask(AccountSearchDisplayTask(std::move(result), accountId, limit));
@@ -498,6 +520,19 @@ void AccountSearchHandler::ShowAccountListHelper(std::unique_ptr<QueryResult> re
 }
 
 // Not thread-safe. Executed inside thread-unsafe callback
+// Prepared-holder twin: takes the staged result out of a PlayerSearchQueryHolder
+// (carrying the remove amount in its limit slot) and forwards. Runs on the
+// delay thread like the AsyncPQueryUnsafe path it replaces.
+void PlayerGoldRemovalHandler::HandleGoldLookupResult(std::unique_ptr<QueryResult>, SqlQueryHolder* holder)
+{
+    PlayerSearchQueryHolder* lookup = static_cast<PlayerSearchQueryHolder*>(holder);
+    std::unique_ptr<QueryResult> result = holder->TakeResult(0);
+    uint32 accountId = lookup->GetAccountId();
+    uint32 removeAmount = lookup->GetLimit();
+    delete holder;
+    HandleGoldLookupResult(std::move(result), accountId, removeAmount);
+}
+
 void PlayerGoldRemovalHandler::HandleGoldLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 removeAmount)
 {
     WorldSession* session = sWorld.FindSession(accountId);

@@ -2,6 +2,8 @@
 
 #include "wdt.h"
 
+using namespace std;
+
 bool wdt_MWMO::prepareLoadedData()
 {
     if (fcc != 'MWMO')

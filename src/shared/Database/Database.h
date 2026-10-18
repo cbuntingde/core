@@ -229,6 +229,9 @@ class Database
             bool DelayQueryHolder(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*, ParamType1), SqlQueryHolder* holder, ParamType1 param1);
         template<typename ParamType1>
             bool DelayQueryHolderUnsafe(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*, ParamType1), SqlQueryHolder* holder, ParamType1 param1);
+        // Static (result, holder) variants: any extra callback data travels in a SqlQueryHolder subclass.
+        bool DelayQueryHolder(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*), SqlQueryHolder* holder);
+        bool DelayQueryHolderUnsafe(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*), SqlQueryHolder* holder);
 
         /// Unless in Sync mode, the return value just gives you a hint whenever or not the statement was added to be async queue
         bool Execute(char const* sql);

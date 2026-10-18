@@ -430,11 +430,13 @@ void GameObject::Update(uint32 update_diff, uint32 /*p_time*/)
                             if (GetGoState() != GO_STATE_READY)
                                 ResetDoorOrButton();
                             //flags in AB are type_button and we need to add them here so no break!
+                            [[fallthrough]];
                         case GAMEOBJECT_TYPE_CHEST:
                         case GAMEOBJECT_TYPE_SPELL_FOCUS:
                         case GAMEOBJECT_TYPE_GOOBER:
                             // Respawn linked trap if any exists
                             RespawnLinkedGameObject();
+                            [[fallthrough]];
                         default:
                             if (!m_spawnedByDefault)        // despawn timer
                             {

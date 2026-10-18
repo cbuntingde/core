@@ -1027,9 +1027,13 @@ void WorldSession::SetAccountData(NewAccountData::AccountDataType type, const st
         }
         else
         {
-            std::string escapedData = data;
-            CharacterDatabase.escape_string(escapedData);
-            CharacterDatabase.PExecute("REPLACE INTO `account_data` VALUES (%u, %u, %llu, '%s')", GetAccountId(), uint32(type), uint64(currentTime), escapedData.c_str());
+            static SqlStatementID repAccountData;
+            SqlStatement accountDataStmt = CharacterDatabase.CreateStatement(repAccountData, "REPLACE INTO `account_data` VALUES (?, ?, ?, ?)");
+            accountDataStmt.addUInt32(GetAccountId());
+            accountDataStmt.addUInt32(uint32(type));
+            accountDataStmt.addUInt64(uint64(currentTime));
+            accountDataStmt.addString(data);
+            accountDataStmt.Execute();
         }
     }
     else
@@ -1044,9 +1048,13 @@ void WorldSession::SetAccountData(NewAccountData::AccountDataType type, const st
         }
         else
         {
-            std::string escapedData = data;
-            CharacterDatabase.escape_string(escapedData);
-            CharacterDatabase.PExecute("REPLACE INTO `character_account_data` VALUES (%u, %u, %llu, '%s')", m_currentPlayerGuid.GetCounter(), uint32(type), uint64(currentTime), escapedData.c_str());
+            static SqlStatementID repCharacterData;
+            SqlStatement characterDataStmt = CharacterDatabase.CreateStatement(repCharacterData, "REPLACE INTO `character_account_data` VALUES (?, ?, ?, ?)");
+            characterDataStmt.addUInt32(m_currentPlayerGuid.GetCounter());
+            characterDataStmt.addUInt32(uint32(type));
+            characterDataStmt.addUInt64(uint64(currentTime));
+            characterDataStmt.addString(data);
+            characterDataStmt.Execute();
         }
     }
 
@@ -1315,6 +1323,7 @@ bool WorldSession::AllowPacket(uint16 opcode)
         case CMSG_GMTICKET_UPDATETEXT:
             m_floodPacketsCount[FLOOD_VERY_SLOW_OPCODES]++;
         // no break, since slow packets are also very slow packets.
+        [[fallthrough]];
         case CMSG_LOGOUT_REQUEST:
         case CMSG_ADD_FRIEND:
         case CMSG_DEL_FRIEND:

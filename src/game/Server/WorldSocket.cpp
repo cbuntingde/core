@@ -271,11 +271,10 @@ WorldSocket::HandlerResult WorldSocket::_HandleAuthSession(WorldPacket& recvPack
     }
 
     // Get the account information from the realmd database
-    std::string safe_account = account; // Duplicate, else will screw the SHA hash verification below
-    LoginDatabase.escape_string(safe_account);
-    // No SQL injection, username escaped.
-    auto accountQueryResult =
-        LoginDatabase.PQuery("SELECT "
+    // Account name travels as a bound parameter below, never interpolated.
+    // Note: `account` itself stays untouched: it feeds the SHA verification further down.
+    static SqlStatementID selAccount;
+    SqlStatement accountStmt = LoginDatabase.CreateStatement(selAccount, "SELECT "
                              "a.`id`, "             // 0
                              "aa.`gmLevel`, "       // 1
                              "a.`sessionkey`, "     // 2
@@ -291,9 +290,12 @@ WorldSocket::HandlerResult WorldSocket::_HandleAuthSession(WorldPacket& recvPack
                              "a.`email_verif`, "    // 12
                              "ab.`unbandate` > UNIX_TIMESTAMP() OR ab.`unbandate` = ab.`bandate` " // 13
                              "FROM `account` a "
-                             "LEFT JOIN `account_access` aa ON a.`id` = aa.`id` AND aa.`RealmID` IN (-1, %u) "
-                             "LEFT JOIN `account_banned` ab ON a.`id` = ab.`id` AND ab.`active` = 1 WHERE a.`username` = '%s' && DATEDIFF(NOW(), a.`last_login`) < 1 "
-                             "ORDER BY aa.`RealmID` DESC LIMIT 1", realmID, safe_account.c_str());
+                             "LEFT JOIN `account_access` aa ON a.`id` = aa.`id` AND aa.`RealmID` IN (-1, ?) "
+                             "LEFT JOIN `account_banned` ab ON a.`id` = ab.`id` AND ab.`active` = 1 WHERE a.`username` = ? && DATEDIFF(NOW(), a.`last_login`) < 1 "
+                             "ORDER BY aa.`RealmID` DESC LIMIT 1");
+    accountStmt.addUInt32(realmID);
+    accountStmt.addString(account);
+    auto accountQueryResult = accountStmt.PQuery();
 
     // Stop if the account is not found
     if (!accountQueryResult)

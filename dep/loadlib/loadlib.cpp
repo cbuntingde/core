@@ -4,6 +4,8 @@
 #include <libmpq/mpq_libmpq.h>
 #include <stdio.h>
 
+using namespace std;
+
 FileLoader::FileLoader()
 {
     data = 0;

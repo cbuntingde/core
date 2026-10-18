@@ -304,7 +304,7 @@ void instance_ruins_of_ahnqiraj::OnCreatureDeath(Creature* pCreature)
             break;
         case NPC_GENERAL_ANDOROV:
             pCreature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
-        // no break
+        [[fallthrough]];
         case NPC_KALDOREI_ELITE:
             // No respawn before Kurinaxx's death or during Rajaxx event.
             if ((m_auiEncounter[TYPE_KURINNAXX] != DONE) || (m_auiEncounter[TYPE_RAJAXX] == IN_PROGRESS))

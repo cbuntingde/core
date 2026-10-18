@@ -188,7 +188,7 @@ bool SqlQueryHolder::SetQuery(size_t index, std::string const& sql)
         return false;
     }
 
-    if(!m_queries[index].first.empty())
+    if(!m_queries[index].first.empty() || (index < m_preparedQueries.size() && m_preparedQueries[index].second))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Attempt assign query to holder index (" SIZEFMTD ") where other query stored (Old: [%s] New: [%s])",
             index,m_queries[index].first.c_str(), sql.c_str());
@@ -197,6 +197,33 @@ bool SqlQueryHolder::SetQuery(size_t index, std::string const& sql)
 
     // not executed yet, just stored (it's not called a holder for nothing)
     m_queries[index] = SqlResultPair(sql, nullptr);
+    return true;
+}
+
+bool SqlQueryHolder::SetPreparedQuery(size_t index, SqlStatement& stmt)
+{
+    if(m_queries.size() <= index)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Query index (" SIZEFMTD ") out of range (size: " SIZEFMTD ") for prepared query.", index, m_queries.size());
+        return false;
+    }
+
+    if(!m_queries[index].first.empty() || (index < m_preparedQueries.size() && m_preparedQueries[index].second))
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Attempt assign query to holder index (" SIZEFMTD ") where other query stored.", index);
+        return false;
+    }
+
+    //verify amount of bound parameters before taking them over
+    if(stmt.get()->boundParams() != stmt.arguments())
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: wrong amount of parameters (%i instead of %i)", stmt.get()->boundParams(), stmt.arguments());
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: statement: %s", stmt.m_pDB->GetStmtString(stmt.ID()).c_str());
+        return false;
+    }
+
+    m_preparedQueries[index].first = stmt.m_index;
+    m_preparedQueries[index].second.reset(stmt.detach());
     return true;
 }
 
@@ -232,12 +259,17 @@ std::unique_ptr<QueryResult> SqlQueryHolder::TakeResult(size_t index)
     }
 
     auto& entry = m_queries[index];
-    if (entry.first.empty()) {
+    // Prepared holder queries stage no text: an unconsumed bound parameter
+    // set marks the occupied slot instead.
+    if (entry.first.empty() && (index >= m_preparedQueries.size() || !m_preparedQueries[index].second)) {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SqlQueryHolder: TakeResult(" SIZEFMTD ") is already empty", index);
         return nullptr;
     }
 
     entry.first.clear();
+    // Taking a prepared result consumes its bound parameters as well.
+    if (index < m_preparedQueries.size())
+        m_preparedQueries[index].second.reset();
     return std::move(entry.second);
 }
 
@@ -255,6 +287,9 @@ void SqlQueryHolder::DeleteAllResults()
         // if the result was never used, free the resources
         // results used already (getresult called) are expected to be deleted
         m_queries[i].second.reset();
+        // Free bound parameters of prepared queries whose results were never taken.
+        if (i < m_preparedQueries.size())
+            m_preparedQueries[i].second.reset();
     }
 }
 
@@ -262,6 +297,7 @@ void SqlQueryHolder::SetSize(size_t size)
 {
     // to optimize push_back, reserve the number of queries about to be executed
     m_queries.resize(size);
+    m_preparedQueries.resize(size);
 }
 
 bool SqlQueryHolderEx::Execute(SqlConnection* conn)
@@ -276,8 +312,9 @@ bool SqlQueryHolderEx::Execute(SqlConnection* conn)
     {
         // execute all queries in the holder and pass the results
         std::string const& sql = queries[i].first;
-        if (!sql.empty()) {
-            std::unique_ptr<QueryResult> result = conn->Query(sql);
+        bool const isPrepared = sql.empty() && i < m_holder->m_preparedQueries.size() && m_holder->m_preparedQueries[i].second;
+        if (!sql.empty() || isPrepared) {
+            std::unique_ptr<QueryResult> result = isPrepared ? conn->QueryStmt(m_holder->m_preparedQueries[i].first.ID(), *m_holder->m_preparedQueries[i].second) : conn->Query(sql);
             m_holder->SetResult(i, std::move(result));
         }
     }

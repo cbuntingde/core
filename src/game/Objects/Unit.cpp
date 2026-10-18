@@ -8822,7 +8822,7 @@ uint32 CreateProcExtendMask(SpellNonMeleeDamage* damageInfo, SpellMissInfo missC
             break;
         case SPELL_MISS_REFLECT:
             procEx |= PROC_EX_REFLECT;
-        // no break
+            [[fallthrough]];
         case SPELL_MISS_NONE:
             if (damageInfo)
             {

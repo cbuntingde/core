@@ -443,8 +443,11 @@ DumpReturn PlayerDumpReader::LoadDump(std::string const& file, uint32 account, s
 
     if (ObjectMgr::CheckPlayerName(name, true) == CHAR_NAME_SUCCESS)
     {
-        CharacterDatabase.escape_string(name);              // for safe, we use name only for sql quearies anyway
-        result = CharacterDatabase.PQuery("SELECT * FROM `characters` WHERE `name` = '%s'", name.c_str());
+        // `name` travels as a bound parameter below, never interpolated.
+        static SqlStatementID selDumpName;
+        SqlStatement dumpNameStmt = CharacterDatabase.CreateStatement(selDumpName, "SELECT * FROM `characters` WHERE `name` = ?");
+        dumpNameStmt.addString(name);
+        result = dumpNameStmt.PQuery();
         if (result)
         {
             name.clear();                                      // use the one from the dump
@@ -535,9 +538,12 @@ DumpReturn PlayerDumpReader::LoadDump(std::string const& file, uint32 account, s
                 {
                     // check if the original name already exists
                     name = getnth(line, 3);                 // characters.name
-                    CharacterDatabase.escape_string(name);
 
-                    result = CharacterDatabase.PQuery("SELECT * FROM `characters` WHERE `name` = '%s'", name.c_str());
+                    // `name` travels as a bound parameter below, never interpolated.
+                    static SqlStatementID selDumpNameReuse;
+                    SqlStatement dumpNameReuseStmt = CharacterDatabase.CreateStatement(selDumpNameReuse, "SELECT * FROM `characters` WHERE `name` = ?");
+                    dumpNameReuseStmt.addString(name);
+                    result = dumpNameReuseStmt.PQuery();
                     if (result)
                     {
                         if (!changenth(line, 15, "16384"))  // characters.character_flags set to "rename on login"

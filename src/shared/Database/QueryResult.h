@@ -44,6 +44,7 @@ class QueryResult
         uint64 GetRowCount() const { return mRowCount; }
 
     protected:
+        // Non-owning view: storage is owned by the derived result class.
         Field* mCurrentRow;
         uint32 mFieldCount;
         uint64 mRowCount;

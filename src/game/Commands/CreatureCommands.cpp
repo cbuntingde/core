@@ -518,10 +518,20 @@ bool ChatHandler::HandleNpcSpawnSetAurasCommand(char* args)
         for (size_t i = 0; i < auras.size(); i++)
             const_cast<uint32*>(const_cast<CreatureDataAddon*>(pAddonEntry)->auras)[i] = atoi(auras[i].c_str());
         const_cast<uint32*>(const_cast<CreatureDataAddon*>(pAddonEntry)->auras)[auras.size()] = 0;
-        WorldDatabase.PExecuteLog("UPDATE `creature_addon` SET `auras`='%s' WHERE `guid`=%u", args, pCreature->GetDBTableGUIDLow());
+        static SqlStatementID updAddonAuras;
+        SqlStatement updAurasStmt = WorldDatabase.CreateStatement(updAddonAuras, "UPDATE `creature_addon` SET `auras`=? WHERE `guid`=?");
+        updAurasStmt.addString(args);
+        updAurasStmt.addUInt32(pCreature->GetDBTableGUIDLow());
+        updAurasStmt.Execute();
     }
     else
-        WorldDatabase.PExecuteLog("REPLACE INTO `creature_addon` (`guid`, `auras`) VALUES (%u, '%s')", pCreature->GetDBTableGUIDLow(), args);
+    {
+        static SqlStatementID repAddonAuras;
+        SqlStatement addonAurasStmt = WorldDatabase.CreateStatement(repAddonAuras, "REPLACE INTO `creature_addon` (`guid`, `auras`) VALUES (?, ?)");
+        addonAurasStmt.addUInt32(pCreature->GetDBTableGUIDLow());
+        addonAurasStmt.addString(args);
+        addonAurasStmt.Execute();
+    }
 
     PSendSysMessage("Auras for guid %u updated to '%s'.", pCreature->GetDBTableGUIDLow(), args);
     return true;

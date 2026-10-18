@@ -52,18 +52,26 @@ void MemberSlot::SetPNOTE(std::string pnote)
 {
     Pnote = pnote;
 
-    // pnote now can be used for encoding to DB
-    CharacterDatabase.escape_string(pnote);
-    CharacterDatabase.PExecute("UPDATE `guild_member` SET `player_note` = '%s' WHERE `guid` = '%u'", pnote.c_str(), guid.GetCounter());
+    // Pnote already stored above; pnote goes to the DB as a bound parameter.
+    // `pnote` travels as a bound parameter below, never interpolated.
+    static SqlStatementID updPNote;
+    SqlStatement pNoteStmt = CharacterDatabase.CreateStatement(updPNote, "UPDATE `guild_member` SET `player_note` = ? WHERE `guid` = ?");
+    pNoteStmt.addString(pnote);
+    pNoteStmt.addUInt32(guid.GetCounter());
+    pNoteStmt.Execute();
 }
 
 void MemberSlot::SetOFFNOTE(std::string offnote)
 {
     OFFnote = offnote;
 
-    // offnote now can be used for encoding to DB
-    CharacterDatabase.escape_string(offnote);
-    CharacterDatabase.PExecute("UPDATE `guild_member` SET `officer_note` = '%s' WHERE `guid` = '%u'", offnote.c_str(), guid.GetCounter());
+    // OFFnote already stored above; offnote goes to the DB as a bound parameter.
+    // `offnote` travels as a bound parameter below, never interpolated.
+    static SqlStatementID updOffNote;
+    SqlStatement offNoteStmt = CharacterDatabase.CreateStatement(updOffNote, "UPDATE `guild_member` SET `officer_note` = ? WHERE `guid` = ?");
+    offNoteStmt.addString(offnote);
+    offNoteStmt.addUInt32(guid.GetCounter());
+    offNoteStmt.Execute();
 }
 
 void MemberSlot::ChangeRank(uint32 newRank)
@@ -152,20 +160,29 @@ bool Guild::Create(Player* leader, std::string gname)
 
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "GUILD: creating guild %s to leader: %s", gname.c_str(), m_LeaderGuid.GetString().c_str());
 
-    // gname already assigned to Guild::name, use it to encode string for DB
-    CharacterDatabase.escape_string(gname);
+    // Strings travel as bound parameters below, never interpolated.
 
     std::string dbGINFO = GINFO;
     std::string dbMOTD = MOTD;
-    CharacterDatabase.escape_string(dbGINFO);
-    CharacterDatabase.escape_string(dbMOTD);
 
     CharacterDatabase.BeginTransaction();
     // CharacterDatabase.PExecute("DELETE FROM guild WHERE guild_id='%u'", Id); - MAX(guild_id)+1 not exist
     CharacterDatabase.PExecute("DELETE FROM `guild_member` WHERE `guild_id`='%u'", m_Id);
-    CharacterDatabase.PExecute("INSERT INTO `guild` (`guild_id`, `name`, `leader_guid`, `info`, `motd`, `create_date`, `emblem_style`, `emblem_color`, `border_style`, `border_color`, `background_color`) "
-                               "VALUES('%u','%s','%u', '%s', '%s','" UI64FMTD "','%i','%i','%i','%i','%i')",
-                               m_Id, gname.c_str(), m_LeaderGuid.GetCounter(), dbGINFO.c_str(), dbMOTD.c_str(), uint64(now), m_EmblemStyle, m_EmblemColor, m_BorderStyle, m_BorderColor, m_BackgroundColor);
+    static SqlStatementID insGuild;
+    SqlStatement guildStmt = CharacterDatabase.CreateStatement(insGuild, "INSERT INTO `guild` (`guild_id`, `name`, `leader_guid`, `info`, `motd`, `create_date`, `emblem_style`, `emblem_color`, `border_style`, `border_color`, `background_color`) "
+                               "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    guildStmt.addUInt32(m_Id);
+    guildStmt.addString(gname);
+    guildStmt.addUInt32(m_LeaderGuid.GetCounter());
+    guildStmt.addString(dbGINFO);
+    guildStmt.addString(dbMOTD);
+    guildStmt.addUInt64(uint64(now));
+    guildStmt.addInt32(m_EmblemStyle);
+    guildStmt.addInt32(m_EmblemColor);
+    guildStmt.addInt32(m_BorderStyle);
+    guildStmt.addInt32(m_BorderColor);
+    guildStmt.addInt32(m_BackgroundColor);
+    guildStmt.Execute();
     CharacterDatabase.CommitTransaction();
 
     CreateDefaultGuildRanks(lSession->GetSessionDbLocaleIndex());
@@ -188,10 +205,12 @@ void Guild::Rename(std::string& newName)
 {
     m_Name = newName;
 
-    std::string escaped = m_Name;
-    CharacterDatabase.escape_string(escaped);
-
-    CharacterDatabase.PExecute("UPDATE `guild` SET `name` = '%s' WHERE `guild_id` = '%u'", escaped.c_str(), m_Id);
+    // `newName` travels as a bound parameter below, never interpolated.
+    static SqlStatementID updGuildName;
+    SqlStatement guildNameStmt = CharacterDatabase.CreateStatement(updGuildName, "UPDATE `guild` SET `name` = ? WHERE `guild_id` = ?");
+    guildNameStmt.addString(newName);
+    guildNameStmt.addUInt32(m_Id);
+    guildNameStmt.Execute();
 }
 
 GuildAddStatus Guild::AddMember(ObjectGuid plGuid, uint32 plRank, uint32 petitionId)
@@ -256,13 +275,15 @@ GuildAddStatus Guild::AddMember(ObjectGuid plGuid, uint32 plRank, uint32 petitio
     members[lowguid] = newmember;
     sGuildMgr.GuildMemberAdded(GetId(), lowguid);
 
-    std::string dbPnote   = newmember.Pnote;
-    std::string dbOFFnote = newmember.OFFnote;
-    CharacterDatabase.escape_string(dbPnote);
-    CharacterDatabase.escape_string(dbOFFnote);
-
-    CharacterDatabase.PExecute("INSERT INTO `guild_member` (`guild_id`, `guid`, `rank`, `player_note`, `officer_note`) VALUES ('%u', '%u', '%u','%s','%s')",
-                               m_Id, lowguid, newmember.RankId, dbPnote.c_str(), dbOFFnote.c_str());
+    // Notes travel as bound parameters below, never interpolated.
+    static SqlStatementID insMember;
+    SqlStatement memberStmt = CharacterDatabase.CreateStatement(insMember, "INSERT INTO `guild_member` (`guild_id`, `guid`, `rank`, `player_note`, `officer_note`) VALUES (?, ?, ?, ?, ?)");
+    memberStmt.addUInt32(m_Id);
+    memberStmt.addUInt32(lowguid);
+    memberStmt.addUInt32(newmember.RankId);
+    memberStmt.addString(newmember.Pnote);
+    memberStmt.addString(newmember.OFFnote);
+    memberStmt.Execute();
 
     // If player not in game data in data field will be loaded from guild tables, no need to update it!!
     if (pl)
@@ -281,18 +302,26 @@ void Guild::SetMOTD(std::string motd)
 {
     MOTD = motd;
 
-    // motd now can be used for encoding to DB
-    CharacterDatabase.escape_string(motd);
-    CharacterDatabase.PExecute("UPDATE `guild` SET `motd`='%s' WHERE `guild_id`='%u'", motd.c_str(), m_Id);
+    // MOTD already stored above; motd goes to the DB as a bound parameter.
+    // `motd` travels as a bound parameter below, never interpolated.
+    static SqlStatementID updMotd;
+    SqlStatement motdStmt = CharacterDatabase.CreateStatement(updMotd, "UPDATE `guild` SET `motd`=? WHERE `guild_id`=?");
+    motdStmt.addString(motd);
+    motdStmt.addUInt32(m_Id);
+    motdStmt.Execute();
 }
 
 void Guild::SetGINFO(std::string ginfo)
 {
     GINFO = ginfo;
 
-    // ginfo now can be used for encoding to DB
-    CharacterDatabase.escape_string(ginfo);
-    CharacterDatabase.PExecute("UPDATE `guild` SET `info`='%s' WHERE `guild_id`='%u'", ginfo.c_str(), m_Id);
+    // GINFO already stored above; ginfo goes to the DB as a bound parameter.
+    // `ginfo` travels as a bound parameter below, never interpolated.
+    static SqlStatementID updGinfo;
+    SqlStatement ginfoStmt = CharacterDatabase.CreateStatement(updGinfo, "UPDATE `guild` SET `info`=? WHERE `guild_id`=?");
+    ginfoStmt.addString(ginfo);
+    ginfoStmt.addUInt32(m_Id);
+    ginfoStmt.Execute();
 }
 
 bool Guild::LoadGuildFromDB(const std::unique_ptr<QueryResult>& guildDataResult)
@@ -418,8 +447,14 @@ bool Guild::LoadRanksFromDB(const std::unique_ptr<QueryResult>& guildRanksResult
         {
             std::string name = m_Ranks[i].Name;
             uint32 rights = m_Ranks[i].Rights;
-            CharacterDatabase.escape_string(name);
-            CharacterDatabase.PExecute("INSERT INTO `guild_rank` (`guild_id`, `id`, `name`, `rights`) VALUES ('%u', '%u', '%s', '%u')", m_Id, uint32(i), name.c_str(), rights);
+            // `name` travels as a bound parameter below, never interpolated.
+            static SqlStatementID insRepairRank;
+            SqlStatement repairRankStmt = CharacterDatabase.CreateStatement(insRepairRank, "INSERT INTO `guild_rank` (`guild_id`, `id`, `name`, `rights`) VALUES (?, ?, ?, ?)");
+            repairRankStmt.addUInt32(m_Id);
+            repairRankStmt.addUInt32(uint32(i));
+            repairRankStmt.addString(name);
+            repairRankStmt.addUInt32(rights);
+            repairRankStmt.Execute();
         }
         CharacterDatabase.CommitTransaction();
     }
@@ -683,9 +718,14 @@ void Guild::CreateRank(std::string name_, uint32 rights)
 
     AddRank(name_, rights);
 
-    // name now can be used for encoding to DB
-    CharacterDatabase.escape_string(name_);
-    CharacterDatabase.PExecute("INSERT INTO `guild_rank` (`guild_id`, `id`, `name`, `rights`) VALUES ('%u', '%u', '%s', '%u')", m_Id, new_rank_id, name_.c_str(), rights);
+    // `name_` travels as a bound parameter below, never interpolated.
+    static SqlStatementID insRank;
+    SqlStatement rankStmt = CharacterDatabase.CreateStatement(insRank, "INSERT INTO `guild_rank` (`guild_id`, `id`, `name`, `rights`) VALUES (?, ?, ?, ?)");
+    rankStmt.addUInt32(m_Id);
+    rankStmt.addUInt32(new_rank_id);
+    rankStmt.addString(name_);
+    rankStmt.addUInt32(rights);
+    rankStmt.Execute();
 }
 
 void Guild::AddRank(std::string const& name_, uint32 rights)
@@ -729,9 +769,13 @@ void Guild::SetRankName(uint32 rankId, std::string name_)
 
     m_Ranks[rankId].Name = name_;
 
-    // name now can be used for encoding to DB
-    CharacterDatabase.escape_string(name_);
-    CharacterDatabase.PExecute("UPDATE `guild_rank` SET `name`='%s' WHERE `id`='%u' AND `guild_id`='%u'", name_.c_str(), rankId, m_Id);
+    // `name_` travels as a bound parameter below, never interpolated.
+    static SqlStatementID updRankName;
+    SqlStatement rankNameStmt = CharacterDatabase.CreateStatement(updRankName, "UPDATE `guild_rank` SET `name`=? WHERE `id`=? AND `guild_id`=?");
+    rankNameStmt.addString(name_);
+    rankNameStmt.addUInt32(rankId);
+    rankNameStmt.addUInt32(m_Id);
+    rankNameStmt.Execute();
 }
 
 void Guild::SetRankRights(uint32 rankId, uint32 rights)

@@ -1366,31 +1366,42 @@ bool ChatHandler::GetDeletedCharacterInfoList(DeletedInfoList& foundList, bool u
         {
             // search by GUID
             if (isNumeric(searchString))
-                resultChar = CharacterDatabase.PQuery("SELECT `guid`, `deleted_name`, `deleted_account`, `deleted_time` FROM `characters` WHERE `deleted_time` IS NOT NULL AND `guid` = %u LIMIT 0,50", uint32(atoi(searchString.c_str())));
+            {
+                static SqlStatementID selDeletedGuid;
+                SqlStatement deletedGuidStmt = CharacterDatabase.CreateStatement(selDeletedGuid, "SELECT `guid`, `deleted_name`, `deleted_account`, `deleted_time` FROM `characters` WHERE `deleted_time` IS NOT NULL AND `guid` = ? LIMIT 0,50");
+                resultChar = deletedGuidStmt.PQuery(uint32(atoi(searchString.c_str())));
+            }
             // search by name
             else
             {
                 if (!normalizePlayerName(searchString))
                     return false;
 
-                CharacterDatabase.escape_string(searchString);
-
-                resultChar = CharacterDatabase.PQuery("SELECT `guid`, `deleted_name`, `deleted_account`, `deleted_time` FROM `characters` WHERE `deleted_time` IS NOT NULL AND `deleted_name` LIKE CONCAT('%s','%%')" " LIMIT 0,50", searchString.c_str());
+                static SqlStatementID selDeletedName;
+                SqlStatement deletedNameStmt = CharacterDatabase.CreateStatement(selDeletedName, "SELECT `guid`, `deleted_name`, `deleted_account`, `deleted_time` FROM `characters` WHERE `deleted_time` IS NOT NULL AND `deleted_name` LIKE CONCAT(?, '%%') LIMIT 0,50");
+                deletedNameStmt.addString(searchString);
+                resultChar = deletedNameStmt.PQuery();
             }
         }
         else
         {
             // search by account id
             if (isNumeric(searchString))
-                resultChar = CharacterDatabase.PQuery("SELECT `guid`, `deleted_name`, `deleted_account`, `deleted_time` FROM `characters` WHERE `deleted_time` IS NOT NULL AND `deleted_account` = %u LIMIT 0,50", uint32(atoi(searchString.c_str())));
+            {
+                static SqlStatementID selDeletedAccount;
+                SqlStatement deletedAccountStmt = CharacterDatabase.CreateStatement(selDeletedAccount, "SELECT `guid`, `deleted_name`, `deleted_account`, `deleted_time` FROM `characters` WHERE `deleted_time` IS NOT NULL AND `deleted_account` = ? LIMIT 0,50");
+                resultChar = deletedAccountStmt.PQuery(uint32(atoi(searchString.c_str())));
+            }
             // search by account name
             else
             {
                 if (!AccountMgr::normalizeString(searchString))
                     return false;
 
-                LoginDatabase.escape_string(searchString);
-                std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `id` FROM `account` WHERE `username` LIKE CONCAT('%s','%%')", searchString.c_str());
+                static SqlStatementID selDeletedUser;
+                SqlStatement deletedUserStmt = LoginDatabase.CreateStatement(selDeletedUser, "SELECT `id` FROM `account` WHERE `username` LIKE CONCAT(?, '%%')");
+                deletedUserStmt.addString(searchString);
+                std::unique_ptr<QueryResult> result = deletedUserStmt.PQuery();
                 std::vector<uint32> list;
                 if (result)
                 {
@@ -1573,8 +1584,12 @@ void ChatHandler::HandleCharacterDeletedRestoreHelper(DeletedInfo const& delInfo
     }
 
     // use blocking query as we need to reload character into cache
-    CharacterDatabase.DirectPExecute("UPDATE `characters` SET `name`='%s', `account`='%u', `deleted_time`=NULL, `deleted_name`=NULL, `deleted_account`=NULL WHERE `deleted_time` IS NOT NULL AND `guid` = %u",
-        delInfo.name.c_str(), delInfo.accountId, delInfo.lowguid);
+    static SqlStatementID updRestoreChar;
+    SqlStatement restoreStmt = CharacterDatabase.CreateStatement(updRestoreChar, "UPDATE `characters` SET `name`=?, `account`=?, `deleted_time`=NULL, `deleted_name`=NULL, `deleted_account`=NULL WHERE `deleted_time` IS NOT NULL AND `guid` = ?");
+    restoreStmt.addString(delInfo.name);
+    restoreStmt.addUInt32(delInfo.accountId);
+    restoreStmt.addUInt32(delInfo.lowguid);
+    restoreStmt.DirectExecute();
     sObjectMgr.LoadPlayerCacheData(delInfo.lowguid);
 }
 
@@ -2068,14 +2083,6 @@ bool ChatHandler::HandleCharacterPremadeGearCommand(char* args)
     return true;
 }
 
-static std::string EscapeString(std::string unescapedString)
-{
-    char* escapedString = new char[unescapedString.length() * 2 + 1];
-    mysql_escape_string(escapedString, unescapedString.c_str(), unescapedString.length());
-    std::string returnString = escapedString;
-    delete[] escapedString;
-    return returnString;
-}
 
 bool ChatHandler::HandleCharacterPremadeSaveGearCommand(char* args)
 {
@@ -2102,8 +2109,13 @@ bool ChatHandler::HandleCharacterPremadeSaveGearCommand(char* args)
         entry = fields[0].GetUInt32() + 1;
     }
 
-    templateName = EscapeString(templateName);
-    if (!WorldDatabase.PExecute("INSERT INTO `player_premade_item_template` (`entry`, `class`, `level`, `name`) VALUES (%u, %u, %u, '%s')", entry, pPlayer->GetClass(), pPlayer->GetLevel(), templateName.c_str()))
+    static SqlStatementID insPremadeItemTmpl;
+    SqlStatement premadeItemTmplStmt = WorldDatabase.CreateStatement(insPremadeItemTmpl, "INSERT INTO `player_premade_item_template` (`entry`, `class`, `level`, `name`) VALUES (?, ?, ?, ?)");
+    premadeItemTmplStmt.addUInt32(entry);
+    premadeItemTmplStmt.addUInt32(pPlayer->GetClass());
+    premadeItemTmplStmt.addUInt32(pPlayer->GetLevel());
+    premadeItemTmplStmt.addString(templateName);
+    if (!premadeItemTmplStmt.Execute())
         return false;
 
     for (int i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
@@ -2194,8 +2206,13 @@ bool ChatHandler::HandleCharacterPremadeSaveSpecCommand(char* args)
         entry = fields[0].GetUInt32() + 1;
     }
 
-    templateName = EscapeString(templateName);
-    if (!WorldDatabase.PExecute("INSERT INTO `player_premade_spell_template` (`entry`, `class`, `level`, `name`) VALUES (%u, %u, %u, '%s')", entry, pPlayer->GetClass(), pPlayer->GetLevel(), templateName.c_str()))
+    static SqlStatementID insPremadeSpellTmpl;
+    SqlStatement premadeSpellTmplStmt = WorldDatabase.CreateStatement(insPremadeSpellTmpl, "INSERT INTO `player_premade_spell_template` (`entry`, `class`, `level`, `name`) VALUES (?, ?, ?, ?)");
+    premadeSpellTmplStmt.addUInt32(entry);
+    premadeSpellTmplStmt.addUInt32(pPlayer->GetClass());
+    premadeSpellTmplStmt.addUInt32(pPlayer->GetLevel());
+    premadeSpellTmplStmt.addString(templateName);
+    if (!premadeSpellTmplStmt.Execute())
         return false;
 
     PlayerInfo const* pInfo = sObjectMgr.GetPlayerInfo(pPlayer->GetRace(), pPlayer->GetClass());
@@ -2251,10 +2268,13 @@ bool ChatHandler::HandleCharacterCopySkinCommand(char* args)
     if (Player* target = GetSelectedPlayer())
     {
         std::string plName(args);
-        CharacterDatabase.escape_string(plName); // No SQL injection
+
 
         //                                                                      0       1       2             3             4              5
-        std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery("SELECT `skin`, `face`, `hair_style`, `hair_color`, `facial_hair`, `gender` FROM `characters` WHERE `name`='%s'", plName.c_str());
+        static SqlStatementID selCopySkin;
+        SqlStatement copySkinStmt = CharacterDatabase.CreateStatement(selCopySkin, "SELECT `skin`, `face`, `hair_style`, `hair_color`, `facial_hair`, `gender` FROM `characters` WHERE `name` = ?");
+        copySkinStmt.addString(plName);
+        std::unique_ptr<QueryResult> result = copySkinStmt.PQuery();
         if (!result)
         {
             PSendSysMessage("Player %s not found.", args);
@@ -3274,8 +3294,10 @@ bool ChatHandler::HandleAddItemCommand(char* args)
     if (!ExtractUInt32(&cId, itemId))                       // [name] manual form
     {
         std::string itemName = cId;
-        WorldDatabase.escape_string(itemName);
-        std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT `entry` FROM `item_template` WHERE `name` = '%s'", itemName.c_str());
+        static SqlStatementID selItemByName;
+        SqlStatement itemByNameStmt = WorldDatabase.CreateStatement(selItemByName, "SELECT `entry` FROM `item_template` WHERE `name` = ?");
+        itemByNameStmt.addString(itemName);
+        std::unique_ptr<QueryResult> result = itemByNameStmt.PQuery();
         if (!result)
         {
             PSendSysMessage(LANG_COMMAND_COULDNOTFIND, cId);
@@ -3369,9 +3391,11 @@ bool ChatHandler::HandleDeleteItemCommand(char* args)
     if (!ExtractUInt32(&cId, itemId))
     {
         std::string itemName = cId;
-        WorldDatabase.escape_string(itemName);
+        static SqlStatementID selItemByName;
+        SqlStatement itemByNameStmt = WorldDatabase.CreateStatement(selItemByName, "SELECT `entry` FROM `item_template` WHERE `name` = ?");
+        itemByNameStmt.addString(itemName);
 
-        std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry` FROM `item_template` WHERE `name` = '%s'", itemName.c_str()));
+        std::unique_ptr<QueryResult> result(itemByNameStmt.PQuery());
 
         if (!result)
         {
@@ -5352,8 +5376,11 @@ bool ChatHandler::HandlePetRenameCommand(char* args)
     auto pet_name = fields[1].GetString();
 
     PSendSysMessage("Pet #%u (\"%s\", owner #%u) renamed to \"%s\"", petId, pet_name, owner_guid, newName.c_str());
-    CharacterDatabase.escape_string(newName);
-    CharacterDatabase.PExecute("UPDATE character_pet SET name = \"%s\" WHERE id = %u", newName.c_str(), petId);
+    static SqlStatementID updPetName;
+    SqlStatement petNameStmt = CharacterDatabase.CreateStatement(updPetName, "UPDATE character_pet SET name = ? WHERE id = ?");
+    petNameStmt.addString(newName);
+    petNameStmt.addUInt32(petId);
+    petNameStmt.Execute();
 
     CharacterPetCache* petData = sCharacterDatabaseCache.GetCharacterPetById(petId);
 
@@ -5649,11 +5676,14 @@ bool ChatHandler::HandleGoldRemoval(char* args)
     }
     else
     {
-        CharacterDatabase.escape_string(name);
-        CharacterDatabase.AsyncPQueryUnsafe(&PlayerGoldRemovalHandler::HandleGoldLookupResult,
-            GetAccountId(), removalAmount,
-            "SELECT money, guid, name FROM characters WHERE name = '%s'",
-            name.c_str());
+
+        PlayerSearchQueryHolder* holder = new PlayerSearchQueryHolder(GetAccountId(), removalAmount);
+        holder->SetSize(1);
+        static SqlStatementID selGoldLookup;
+        SqlStatement goldLookupStmt = CharacterDatabase.CreateStatement(selGoldLookup, "SELECT money, guid, name FROM characters WHERE name = ?");
+        goldLookupStmt.addString(name);
+        holder->SetPreparedQuery(0, goldLookupStmt);
+        CharacterDatabase.DelayQueryHolderUnsafe(static_cast<void (*)(std::unique_ptr<QueryResult>, SqlQueryHolder*)>(&PlayerGoldRemovalHandler::HandleGoldLookupResult), holder);
     }
     return true;
 }

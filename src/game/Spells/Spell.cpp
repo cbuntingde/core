@@ -3532,7 +3532,7 @@ void Spell::cancel()
             m_caster->ResetGCD(m_spellInfo);
             if (m_caster->IsPlayer())
                 m_caster->ToPlayer()->RestoreSpellMods(this);
-        //(no break)
+        [[fallthrough]];
         case SPELL_STATE_DELAYED:
         {
             SendInterrupted(0);
@@ -7957,7 +7957,7 @@ public:
         {
             case PUSH_IN_CONE:
                 i_angle = sSpellMgr.GetSpellCone(i_spell.m_spellInfo->Id);
-                // no break
+                [[fallthrough]];
             case PUSH_SELF_CENTER:
                 if (i_castingObject)
                 {

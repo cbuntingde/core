@@ -21,6 +21,8 @@
 #include "dbcfile.h"
 #include "libmpq/mpq_libmpq.h"
 
+using namespace std;
+
 DBCFile::DBCFile(const std::string& filename):
     filename(filename),
     data(0)

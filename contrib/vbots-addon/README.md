@@ -20,10 +20,11 @@ You need an admin game account: all bot commands require it.
   to polymorph (or similar) and what to attack first.
 - **Control** — tell bots to follow closely or at a distance, hold
   position, stay quiet unless attacked, or help again.
-- **Skill** — set how a bot plays: relaxed (slower, misses more),
-  steady, or sharp (contests every cast).
+- **Skill** — set how a bot plays: casual (slower, misses more),
+  normal, or sharp (contests every cast).
 - **Battle bots** — add Horde or Alliance bots to Warsong, Arathi, or
-  Alterac at your level bracket.
+  Alterac at your level bracket, and set how they play: casual, normal,
+  or sharp.
 
 Drag the panel by its background; Esc or Close hides it.
 

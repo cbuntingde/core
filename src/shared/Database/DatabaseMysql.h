@@ -24,6 +24,7 @@
 
 //#include "Common.h"
 #include "Database.h"
+#include <memory>
 #include "Policies/Singleton.h"
 
 #ifdef WIN32
@@ -71,8 +72,7 @@ private:
 
     MYSQL* m_pMySQLConn;
     MYSQL_STMT* m_stmt;
-    MYSQL_BIND* m_pInputArgs;
-    MYSQL_BIND* m_pResult;
+    std::unique_ptr<MYSQL_BIND[]> m_pInputArgs;
     MYSQL_RES* m_pResultMetadata;
 };
 

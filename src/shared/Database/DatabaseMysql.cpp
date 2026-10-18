@@ -21,6 +21,7 @@
 
 #include <errmsg.h>
 #include <mysqld_error.h>
+#include <type_traits>
 #include "Log.h"
 #include "Errors.h"
 #include "Util.h"
@@ -343,7 +344,7 @@ SqlPreparedStatement* MySQLConnection::CreateStatement(std::string const& fmt)
 
 //////////////////////////////////////////////////////////////////////////
 MySqlPreparedStatement::MySqlPreparedStatement(std::string const& fmt, SqlConnection& conn, MYSQL* mysql) : SqlPreparedStatement(fmt, conn),
-    m_pMySQLConn(mysql), m_stmt(nullptr), m_pInputArgs(nullptr), m_pResult(nullptr), m_pResultMetadata(nullptr)
+    m_pMySQLConn(mysql), m_stmt(nullptr), m_pInputArgs(nullptr), m_pResultMetadata(nullptr)
 {
 }
 
@@ -402,8 +403,7 @@ bool MySqlPreparedStatement::prepare()
     //bind input buffers
     if(m_nParams)
     {
-        m_pInputArgs = new MYSQL_BIND[m_nParams];
-        memset(m_pInputArgs, 0, sizeof(MYSQL_BIND) * m_nParams);
+        m_pInputArgs = std::make_unique<MYSQL_BIND[]>(m_nParams);
     }
 
     //check if we have a statement which returns result sets
@@ -451,7 +451,7 @@ void MySqlPreparedStatement::bind(SqlStmtParameters const& holder)
     }
 
     //bind input arguments
-    if (mysql_stmt_bind_param(m_stmt, m_pInputArgs))
+    if (mysql_stmt_bind_param(m_stmt, m_pInputArgs.get()))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: mysql_stmt_bind_param() failed\n");
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
@@ -481,16 +481,13 @@ void MySqlPreparedStatement::RemoveBinds()
     if(!m_stmt)
         return;
 
-    delete [] m_pInputArgs;
-    delete [] m_pResult;
+    m_pInputArgs.reset();
 
     mysql_free_result(m_pResultMetadata);
     mysql_stmt_close(m_stmt);
 
     m_stmt = nullptr;
     m_pResultMetadata = nullptr;
-    m_pResult = nullptr;
-    m_pInputArgs = nullptr;
 
     m_bPrepared = false;
 }
@@ -556,11 +553,17 @@ std::unique_ptr<QueryResult> MySqlPreparedStatement::query()
     //so fetched values fit without truncation
     std::vector<std::unique_ptr<char[]>> buffers(nFields);
     std::vector<unsigned long> lengths(nFields);
-    std::vector<my_bool> isNull(nFields), isError(nFields);
+    // MYSQL_BIND::is_null and ::error are my_bool* (char) in the Windows client
+    // headers but bool* in the Linux ones, so take the indicator type from the
+    // field instead of assuming my_bool. Plain arrays rather than
+    // std::vector<bool>, whose proxy reference cannot be address-taken.
+    typedef std::remove_pointer<decltype(MYSQL_BIND::is_null)>::type NullIndicator;
+    std::unique_ptr<NullIndicator[]> isNull = std::make_unique<NullIndicator[]>(nFields);
+    std::unique_ptr<NullIndicator[]> isError = std::make_unique<NullIndicator[]>(nFields);
     std::vector<MYSQL_BIND> outBinds(nFields);
     for(uint32 i = 0; i < nFields; ++i)
     {
-        buffers[i].reset(new char[pFields[i].max_length + 1]);
+        buffers[i] = std::make_unique<char[]>(pFields[i].max_length + 1);
         outBinds[i].buffer_type = MYSQL_TYPE_STRING;
         outBinds[i].buffer = buffers[i].get();
         outBinds[i].buffer_length = pFields[i].max_length + 1;

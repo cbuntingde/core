@@ -3,11 +3,6 @@ name: Pull Request SQL Check
 
 on:
   pull_request:
-    paths:
-      - '.github/scripts/export-and-verify-sql-dumps.sh'
-      - '.github/scripts/prepare-sql-test-environment.sh'
-      - '.github/workflows/pr-sql-check.yaml'
-      - '**/*.sql'
 
 env:
   WORLD_DB_ARCHIVE: world_full_14_june_2021
@@ -23,6 +18,7 @@ jobs:
         # Public Docker Hub pulls on GitHub-hosted runners are exempt from
         # Docker Hub rate limits:
         # https://docs.github.com/actions/reference/limits#docker-hubs-rate-limit-for-github-actions
+        # Pinned to 5.6 on purpose: DatabaseMysql.h explicitly rejects MySQL 8.x client libs, and the world-dump archive is 5.5-era syntax. Do not bump without a client-lib migration and green CI.
         image: mysql:5.6
         env:
           MYSQL_ROOT_PASSWORD: root

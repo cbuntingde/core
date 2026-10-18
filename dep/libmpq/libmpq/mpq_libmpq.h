@@ -27,8 +27,6 @@
 #include <deque>
 #include <cstdint>
 
-using namespace std;
-
 class MPQArchive
 {
 
@@ -38,7 +36,7 @@ class MPQArchive
         MPQArchive(const char* filename);
         void close();
 
-        void GetFileListTo(vector<string>& filelist)
+        void GetFileListTo(std::vector<std::string>& filelist)
         {
             uint32_t filenum;
             if (libmpq__file_number(mpq_a, "(listfile)", &filenum)) return;
@@ -58,7 +56,7 @@ class MPQArchive
             {
                 //cout << token << endl;
                 token[strlen(token) - 1] = 0;
-                string s = token;
+                std::string s = token;
                 filelist.push_back(s);
                 counter += strlen(token) + 2;
                 token = strtok(NULL, seps);

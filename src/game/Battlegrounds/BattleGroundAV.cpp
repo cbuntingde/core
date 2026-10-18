@@ -649,7 +649,7 @@ void BattleGroundAV::HandleQuestComplete(Unit* questGiver, uint32 questid, Playe
         case BG_AV_QUEST_H_BOSS1:
             m_teamQuestStatus[teamIdx][4] += 4;               // there are 2 quests where you can turn in 5 or 1 item.. ( + 4 cause +1 will be done some lines below)
             reputation = 4;
-        // no break
+            [[fallthrough]];
         case BG_AV_QUEST_A_BOSS2:
         case BG_AV_QUEST_H_BOSS2:
             m_teamQuestStatus[teamIdx][4]++;

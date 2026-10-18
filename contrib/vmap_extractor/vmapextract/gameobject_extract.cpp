@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <stdio.h>
 
+using namespace std;
+
 // Check if file exists in MPQ without adding to failedPaths
 static bool MPQFileExists(const std::string& path)
 {

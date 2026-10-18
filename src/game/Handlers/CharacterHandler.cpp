@@ -762,6 +762,36 @@ void WorldSession::HandleShowingCloakOpcode(NullClientPacket const& /*packet*/)
     _player->ToggleFlag(PLAYER_FLAGS, PLAYER_FLAGS_HIDE_CLOAK);
 }
 
+class RenameQueryHolder : public SqlQueryHolder
+{
+public:
+    RenameQueryHolder(uint32 accountId, std::string newname)
+        : m_accountId(accountId), m_newname(newname) {}
+    uint32 GetAccountId() const { return m_accountId; }
+    std::string const& GetNewName() const { return m_newname; }
+private:
+    uint32 m_accountId;
+    std::string m_newname;
+};
+
+// Not thread-safe, performed in async unsafe callback
+class RenameHandler
+{
+public:
+    void HandleRenameSelectResult(std::unique_ptr<QueryResult>, SqlQueryHolder* queryHolder)
+    {
+        RenameQueryHolder* holder = dynamic_cast<RenameQueryHolder*>(queryHolder);
+        if (!holder)
+            return;
+        std::unique_ptr<QueryResult> result = holder->TakeResult(0);
+        uint32 accountId = holder->GetAccountId();
+        std::string newname = holder->GetNewName();
+        holder->DeleteAllResults();
+        delete holder;
+        WorldSession::HandleChangePlayerNameOpcodeCallBack(std::move(result), accountId, newname);
+    }
+} renameHandler;
+
 void WorldSession::HandleCharRenameOpcode(WorldPackets::Character::CharRename const& packet)
 {
     // prevent character rename to invalid name
@@ -791,16 +821,18 @@ void WorldSession::HandleCharRenameOpcode(WorldPackets::Character::CharRename co
         return;
     }
 
-    std::string escaped_newname = packet.newname;
-    CharacterDatabase.escape_string(escaped_newname);
-
-    // make sure that the character belongs to the current account, that rename at login is enabled
-    // and that there is no character with the desired new name
-    CharacterDatabase.AsyncPQuery(&WorldSession::HandleChangePlayerNameOpcodeCallBack,
-                                  GetAccountId(), packet.newname,
-                                  "SELECT `guid`, `name` FROM `characters` WHERE `guid` = %u AND `account` = %u AND (`character_flags` & %u) = %u AND NOT EXISTS (SELECT NULL FROM `characters` WHERE `name` = '%s')",
-                                  packet.guid.GetCounter(), GetAccountId(), CHARACTER_FLAG_RENAME, CHARACTER_FLAG_RENAME, escaped_newname.c_str()
-                                 );
+    // `newname` travels as a bound parameter below, never interpolated.
+    RenameQueryHolder* holder = new RenameQueryHolder(GetAccountId(), packet.newname);
+    holder->SetSize(1);
+    static SqlStatementID selRename;
+    SqlStatement renameStmt = CharacterDatabase.CreateStatement(selRename, "SELECT `guid`, `name` FROM `characters` WHERE `guid` = ? AND `account` = ? AND (`character_flags` & ?) = ? AND NOT EXISTS (SELECT NULL FROM `characters` WHERE `name` = ?)");
+    renameStmt.addUInt32(packet.guid.GetCounter());
+    renameStmt.addUInt32(GetAccountId());
+    renameStmt.addUInt32(uint32(CHARACTER_FLAG_RENAME));
+    renameStmt.addUInt32(uint32(CHARACTER_FLAG_RENAME));
+    renameStmt.addString(packet.newname);
+    holder->SetPreparedQuery(0, renameStmt);
+    CharacterDatabase.DelayQueryHolderUnsafe(&renameHandler, &RenameHandler::HandleRenameSelectResult, holder);
 }
 
 void WorldSession::HandleChangePlayerNameOpcodeCallBack(std::unique_ptr<QueryResult> result, uint32 accountId, std::string newname)

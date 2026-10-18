@@ -27,6 +27,7 @@
 #include "LockedQueue.h"
 #include <queue>
 #include "DatabaseCallback.h"
+#include "SqlPreparedStatement.h"
 #include <memory>
 
 // ---- BASE ---
@@ -131,6 +132,10 @@ class SqlQueryHolder
     private:
         typedef std::pair<std::string, std::unique_ptr<QueryResult>> SqlResultPair;
         std::vector<SqlResultPair> m_queries;
+        // Staged prepared SELECTs: statement id plus owned bound parameters.
+        // A slot holds either text (m_queries) or a prepared query, never both.
+        typedef std::pair<SqlStatementID, std::unique_ptr<SqlStmtParameters>> SqlPreparedQueryPair;
+        std::vector<SqlPreparedQueryPair> m_preparedQueries;
 
         uint32 serialId;
     public:
@@ -139,6 +144,8 @@ class SqlQueryHolder
         virtual ~SqlQueryHolder() = default;
         bool SetQuery(size_t index, std::string const& sql);
         bool SetPQuery(size_t index, char const* format, ...) ATTR_PRINTF(3,4); // <-- the format is copied
+        // Stage a prepared SELECT: takes over the statement's bound parameters.
+        bool SetPreparedQuery(size_t index, SqlStatement& stmt);
         void SetSize(size_t size);
         size_t GetSize() const { return m_queries.size(); }
         /// When you are using this function, you are the new owner of the ptr. The query will be removed from the QueryHolder
