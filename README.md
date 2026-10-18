@@ -23,11 +23,15 @@ and player bots that are learning to fight properly.
 
 ### Player bots
 - Bots are being taught to fight from clear priority lists instead of
-  hard-coded per-class scripts, for every class, in groups and in battlegrounds. Planned
-  next: simple orders for group bots (follow close, attack my target,
-  crowd-control my mark), smarter healers, battleground bots that play
-  objectives instead of wandering, and difficulty settings from relaxed
-  to sharp.
+  hard-coded per-class scripts, for every class, in groups and in battlegrounds.
+- Group bots now take simple orders from the bot panel or chat: follow
+  closely or at a distance, hold position, stay quiet unless attacked,
+  help again, attack your target, mark targets to focus or
+  crowd-control, and come to you. Each bot can also play relaxed,
+  steady, or sharp from the panel's Skill buttons: relaxed bots react
+  slower and let more enemy spells through, sharp bots contest every
+  cast and shake off every curse they can. Planned next: smarter
+  healers and battleground bots that play objectives instead of wandering.
 - Fixed battleground mages casting polymorph on their current target when
   they meant to sheep an extra attacker; they now sheep the extra attacker.
 

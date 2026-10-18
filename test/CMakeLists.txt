@@ -4,6 +4,9 @@
 add_executable(vmangos_tests
     TestMain.cpp
     DatabaseTests.cpp
+    BotTelemetryTests.cpp
+    BotStanceTests.cpp
+    BotPersonalityTests.cpp
 )
 
 target_include_directories(vmangos_tests PRIVATE
@@ -26,6 +29,12 @@ target_link_libraries(vmangos_tests PRIVATE
 
 if(WIN32)
   target_link_libraries(vmangos_tests PRIVATE ws2_32 mswsock winmm)
+  # Same MySQL client libraries as the main binaries; ${MYSQL_LIBRARIES}
+  # above is only set by the Unix find_package module.
+  target_link_libraries(vmangos_tests PRIVATE
+    optimized ${MYSQL_LIBRARY}
+    debug ${MYSQL_DEBUG_LIBRARY}
+  )
   target_compile_options(vmangos_tests PRIVATE /bigobj /EHsc)
 else()
   find_package(Threads)

@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "Policies/SingletonImp.h"
 #include "PlayerBotMgr.h"
+#include "PlayerBots/BotTelemetry.h"
 #include "ObjectMgr.h"
 #include "World.h"
 #include "WorldSession.h"
@@ -189,6 +190,9 @@ void PlayerBotMgr::OnPlayerInWorld(Player* player)
 
 void PlayerBotMgr::Update(uint32 diff)
 {
+    // Bot telemetry: windowed per-class report to the server log.
+    BotTelemetry::Instance().Update(diff);
+
     // Temporary bots.
     std::map<uint32, uint32>::iterator it;
     for (it = m_tempBots.begin(); it != m_tempBots.end(); ++it)
@@ -1513,6 +1517,199 @@ bool ChatHandler::HandlePartyBotClearMarksCommand(char* args)
     return true;
 }
 
+// Applies one stance order to a single bot. Follow resumes trailing the
+// leader (follow does not break off current combat; that is what cometome
+// is for). Stay anchors the bot and disengages from assisted targets while
+// keeping self-defense. Returns false when the target is not a live party bot.
+bool ApplyPartyBotStanceOrder(Player* pBot, PartyBotStanceOrder order, int followFar)
+{
+    if (!pBot->AI() || !pBot->IsAlive())
+        return false;
+
+    if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pBot->AI()))
+    {
+        switch (order)
+        {
+            case PARTY_BOT_ORDER_FOLLOW:
+                pAI->m_stance.Follow(followFar == PARTY_BOT_FOLLOW_KEEP ? pAI->m_stance.followFar : followFar == PARTY_BOT_FOLLOW_FAR);
+                return true;
+            case PARTY_BOT_ORDER_HOLD:
+                pAI->m_stance.Hold(pBot->GetPositionX(), pBot->GetPositionY(), pBot->GetPositionZ());
+                return true;
+            case PARTY_BOT_ORDER_STAY:
+                pAI->m_stance.Stay(pBot->GetPositionX(), pBot->GetPositionY(), pBot->GetPositionZ());
+                if (Unit* pVictim = pBot->GetVictim())
+                {
+                    bool selfDefense = false;
+                    for (const auto pAttacker : pBot->GetAttackers())
+                    {
+                        if (pAttacker == pVictim)
+                        {
+                            selfDefense = true;
+                            break;
+                        }
+                    }
+                    if (!selfDefense)
+                        StopPartyBotAttackHelper(pAI, pBot);
+                }
+                return true;
+            case PARTY_BOT_ORDER_ASSIST:
+                pAI->m_stance.Assist();
+                return true;
+        }
+    }
+
+    return false;
+}
+
+// Runs a stance order on the selected party bot, or on every group party
+// bot when none is selected. Reports what happened; returns false when no
+// bot took the order.
+bool ChatHandler::HandlePartyBotStanceHelper(PartyBotStanceOrder order, int followFar, char const* singleFormat, char const* allFormat)
+{
+    Player* pPlayer = GetSession()->GetPlayer();
+    Player* pTarget = GetSelectedPlayer();
+
+    if (pTarget && (pTarget != pPlayer))
+    {
+        if (ApplyPartyBotStanceOrder(pTarget, order, followFar))
+        {
+            PSendSysMessage(singleFormat, pTarget->GetName());
+            return true;
+        }
+        SendSysMessage("Target is not a party bot.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    Group* pGroup = pPlayer->GetGroup();
+    if (!pGroup)
+    {
+        SendSysMessage("You are not in a group.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    bool ok = false;
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            if (pMember == pPlayer)
+                continue;
+            ok = ApplyPartyBotStanceOrder(pMember, order, followFar) || ok;
+        }
+    }
+
+    if (ok)
+        SendSysMessage(allFormat);
+    else
+        SendSysMessage("There are no party bots in the group.");
+    return ok;
+}
+
+bool ChatHandler::HandlePartyBotFollowCommand(char* args)
+{
+    if (!args || !*args)
+        return HandlePartyBotStanceHelper(PARTY_BOT_ORDER_FOLLOW, PARTY_BOT_FOLLOW_KEEP, "%s will follow you.", "All party bots will follow you.");
+    if (strcmp(args, "close") == 0)
+        return HandlePartyBotStanceHelper(PARTY_BOT_ORDER_FOLLOW, PARTY_BOT_FOLLOW_CLOSE, "%s will follow you closely.", "All party bots will follow you closely.");
+    if (strcmp(args, "far") == 0)
+        return HandlePartyBotStanceHelper(PARTY_BOT_ORDER_FOLLOW, PARTY_BOT_FOLLOW_FAR, "%s will follow you at a distance.", "All party bots will follow you at a distance.");
+
+    SendSysMessage("Usage: .partybot follow [close|far]");
+    SetSentErrorMessage(true);
+    return false;
+}
+
+bool ChatHandler::HandlePartyBotHoldCommand(char* args)
+{
+    return HandlePartyBotStanceHelper(PARTY_BOT_ORDER_HOLD, PARTY_BOT_FOLLOW_KEEP, "%s is holding position.", "All party bots are holding position.");
+}
+
+bool ChatHandler::HandlePartyBotStayCommand(char* args)
+{
+    return HandlePartyBotStanceHelper(PARTY_BOT_ORDER_STAY, PARTY_BOT_FOLLOW_KEEP, "%s will stay here and only defend itself.", "All party bots will stay here and only defend themselves.");
+}
+
+bool ChatHandler::HandlePartyBotAssistCommand(char* args)
+{
+    return HandlePartyBotStanceHelper(PARTY_BOT_ORDER_ASSIST, PARTY_BOT_FOLLOW_KEEP, "%s will assist you again.", "All party bots will assist you again.");
+}
+
+// Runs a skill order on the selected party bot, or on every group party bot
+// when none is selected. Same scope pattern as HandlePartyBotStanceHelper:
+// one target when the leader selected a bot, the whole group otherwise.
+bool ApplyPartyBotSkill(Player* pBot, BotSkill skill)
+{
+    if (!pBot->AI() || !pBot->IsAlive())
+        return false;
+
+    if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pBot->AI()))
+    {
+        pAI->m_personality.Set(skill);
+        return true;
+    }
+
+    return false;
+}
+
+bool ChatHandler::HandlePartyBotSkillHelper(BotSkill skill)
+{
+    Player* pPlayer = GetSession()->GetPlayer();
+    Player* pTarget = GetSelectedPlayer();
+
+    if (pTarget && (pTarget != pPlayer))
+    {
+        if (ApplyPartyBotSkill(pTarget, skill))
+        {
+            PSendSysMessage("%s now plays %s.", pTarget->GetName(), BotPersonality::ToString(skill));
+            return true;
+        }
+        SendSysMessage("Target is not a party bot.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    Group* pGroup = pPlayer->GetGroup();
+    if (!pGroup)
+    {
+        SendSysMessage("You are not in a group.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    bool ok = false;
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            if (pMember == pPlayer)
+                continue;
+            ok = ApplyPartyBotSkill(pMember, skill) || ok;
+        }
+    }
+
+    if (ok)
+        PSendSysMessage("All party bots now play %s.", BotPersonality::ToString(skill));
+    else
+        SendSysMessage("There are no party bots in the group.");
+    return ok;
+}
+
+bool ChatHandler::HandlePartyBotSkillCommand(char* args)
+{
+    BotSkill const skill = BotPersonality::FromString(args);
+    if (skill == BOT_SKILL_INVALID)
+    {
+        SendSysMessage("Usage: .partybot skill <casual|normal|sharp>");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    return HandlePartyBotSkillHelper(skill);
+}
+
 bool HandlePartyBotComeToMeHelper(Player* pBot, Player* pPlayer)
 {
     if (pBot->AI() && pBot->IsAlive() && pBot->IsInMap(pPlayer) && !pBot->HasUnitState(UNIT_STATE_NO_FREE_MOVE))
@@ -1526,6 +1723,7 @@ bool HandlePartyBotComeToMeHelper(Player* pBot, Player* pPlayer)
                 pBot->SetStandState(UNIT_STAND_STATE_STAND);
 
             pBot->InterruptSpellsWithInterruptFlags(SPELL_INTERRUPT_FLAG_MOVEMENT);
+            pAI->m_stance.ClearHold();
             pBot->MonsterMove(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ());
             return true;
         }

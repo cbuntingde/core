@@ -42,6 +42,7 @@
 #include "Formulas.h"
 #include "Util.h"
 #include "BattleGround.h"
+#include "PlayerBots/BotTelemetry.h"
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
 #include "DBCStores.h"
@@ -778,6 +779,13 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDa
         duel_hasEnded = true;
     }
 
+    // Bot telemetry: effective damage done (clamped to remaining health).
+    if (Player* pAttacker = ToPlayer())
+    {
+        if (pAttacker->IsBot())
+            BotTelemetry::Instance().RecordDamage(pAttacker->GetClass(), damage < health ? damage : health);
+    }
+
     // Enter combat or extend leash timer.
     if (ShouldEnterCombat())
     {
@@ -981,6 +989,10 @@ void Unit::Kill(Unit* pVictim, SpellEntry const* spellProto, bool durabilityLoss
     Player* pPlayerTap = GetCharmerOrOwnerPlayerOrPlayerItself();
     Creature* pCreatureVictim = pVictim->ToCreature();
     Player* pPlayerVictim = pVictim->ToPlayer();
+
+    // Bot telemetry: bot deaths.
+    if (pPlayerVictim && pPlayerVictim->IsBot())
+        BotTelemetry::Instance().RecordDeath(pPlayerVictim->GetClass());
     Group* pGroupTap = nullptr;
 
     // in creature kill case group/player tap stored for pCreatureVictim

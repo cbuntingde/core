@@ -23,6 +23,7 @@
 #include "Player.h"
 #include "BattleGround.h"
 #include "BattleGroundMgr.h"
+#include "PlayerBots/BotTelemetry.h"
 #include "Creature.h"
 #include "Language.h"
 #include "SpellAuraDefines.h"
@@ -751,6 +752,10 @@ void BattleGround::EndBattleGround(Team winner)
                 logStmt.Execute();
             }
         }
+
+        // Bot telemetry: per-class win rate.
+        if (pPlayer->IsBot())
+            BotTelemetry::Instance().RecordMatch(pPlayer->GetClass(), team == winner);
 
         sLog.Player(pPlayer->GetSession(), LOG_BG, LOG_LVL_BASIC, "Id %u type %u start %u team %u",
             GetInstanceID(), GetTypeID(), GetStartTime() / 1000, team);

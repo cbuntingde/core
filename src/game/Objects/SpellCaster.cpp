@@ -23,6 +23,7 @@
 #include "Chat.h"
 #include "Spell.h"
 #include "SpellAuras.h"
+#include "PlayerBots/BotTelemetry.h"
 #include "World.h"
 #include "WorldPacket.h"
 #include "Opcodes.h"
@@ -1037,6 +1038,16 @@ int32 SpellCaster::DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* s
 
     if (IsCreature() && ((Creature*)this)->IsTotem())
         pHealer = pUnit->GetOwner();
+
+    // Bot telemetry: effective healing done (post overheal).
+    if (gain > 0)
+    {
+        if (Player* pHealerPlayer = pHealer->ToPlayer())
+        {
+            if (pHealerPlayer->IsBot())
+                BotTelemetry::Instance().RecordHeal(pHealerPlayer->GetClass(), uint32(gain));
+        }
+    }
 
     if (IsPlayer() || pVictim->IsPlayer())
         pHealer->SendHealSpellLog(pVictim, spellProto->Id, addhealth, critical);

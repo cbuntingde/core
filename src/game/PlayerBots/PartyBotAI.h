@@ -17,6 +17,7 @@
 #ifndef MANGOS_PARTYBOTAI_H
 #define MANGOS_PARTYBOTAI_H
 
+#include "BotStance.h"
 #include "CombatBotBaseAI.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
@@ -64,6 +65,9 @@ public:
     Unit* GetDistancingTarget(Unit* pEnemy);
     bool RunAwayFromTarget(Unit* pEnemy);
     bool CrowdControlMarkedTargets();
+    bool AcceptsTarget(Unit const* pTarget, BotTargetSource source) const;
+    void ReturnToHoldAnchor();
+    void DropOutOfLeashVictim();
     bool EnterCombatDruidForm();
     bool ShouldEnterStealth() const;
     bool EnterStealthIfNeeded(SpellEntry const* pStealthSpell);
@@ -91,6 +95,7 @@ public:
     void UpdateOutOfCombatAI_Druid() final;
 
     std::vector<RaidTargetIcon> m_marksToCC;
+    BotStance m_stance;
     std::vector<RaidTargetIcon> m_marksToFocus;
     ShortTimeTracker m_updateTimer;
     ObjectGuid m_leaderGuid;

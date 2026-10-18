@@ -2,6 +2,7 @@
 #define MANGOS_COMBAT_BOT_BASE_H
 
 #include "PlayerBotAI.h"
+#include "BotPersonality.h"
 #include "BotRotation.h"
 #include "SpellEntry.h"
 #include "Player.h"
@@ -126,6 +127,13 @@ public:
     SpellCastResult DoCastSpell(Unit* pTarget, SpellEntry const* pSpellEntry);
     virtual bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     virtual bool CanUseCrowdControl(SpellEntry const* /*pSpellEntry*/, Unit const* /*pTarget*/) const { return true; }
+
+    // Skill-profile gates (see BotPersonality.h). Interrupt and dispel
+    // rotation conditions call these so casual bots sometimes let casts and
+    // debuffs through like humans do, while sharp bots never skip on purpose.
+    // Each rolls once per evaluation against the profile's attempt chance.
+    bool ShouldAttemptInterrupt() const;
+    bool ShouldAttemptDispel() const;
 
     // Data-driven rotation framework. Rotations are ordered spell-priority
     // tables built from m_spells and evaluated by RunRotation; movement and
@@ -720,6 +728,10 @@ public:
     bool m_receivedBgInvite = false;
     uint8 m_visualHonorRank = 0;
     CombatBotRoles m_role = ROLE_INVALID;
+    // Skill profile: reaction speed, interrupt/dispel eagerness, consumable
+    // use. Defaults to normal; `.partybot skill` mutates it for party bots.
+    // Battle bots share the base and stay on the default (no command yet).
+    BotPersonality m_personality;
 };
 
 #endif

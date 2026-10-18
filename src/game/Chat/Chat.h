@@ -25,6 +25,8 @@
 #include "Common.h"
 #include "SharedDefines.h"
 #include "ObjectGuid.h"
+#include "PlayerBots/BotStance.h"
+#include "PlayerBots/BotPersonality.h"
 #include <memory>
 
 struct AreaTriggerTeleport;
@@ -291,6 +293,13 @@ class ChatHandler
         bool HandlePartyBotControlMarkCommand(char * args);
         bool HandlePartyBotFocusMarkCommand(char * args);
         bool HandlePartyBotClearMarksCommand(char * args);
+        bool HandlePartyBotFollowCommand(char * args);
+        bool HandlePartyBotHoldCommand(char * args);
+        bool HandlePartyBotStayCommand(char * args);
+        bool HandlePartyBotAssistCommand(char * args);
+        bool HandlePartyBotSkillCommand(char * args);
+        bool HandlePartyBotSkillHelper(BotSkill skill);
+        bool HandlePartyBotStanceHelper(PartyBotStanceOrder order, int followFar, char const* singleFormat, char const* allFormat);
         bool HandlePartyBotComeToMeCommand(char * args);
         bool HandlePartyBotUseGObjectCommand(char * args);
         bool HandlePartyBotPauseCommand(char * args);

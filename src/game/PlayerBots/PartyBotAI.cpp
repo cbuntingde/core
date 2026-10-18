@@ -39,9 +39,9 @@ enum PartyBotSpells
     PB_SPELL_HONORLESS_TARGET = 2479,
 };
 
-#define PB_UPDATE_INTERVAL 1000
-#define PB_MIN_FOLLOW_DIST 3.0f
-#define PB_MAX_FOLLOW_DIST 6.0f
+// Party-bot tick intervals live in BotPersonality.h (normal/sharp 1000ms, casual 1500ms).
+// Party-bot follow distances live in BotStance.h (close 3-6, far 12-18).
+// Hold leash and anchor tolerance live there too.
 #define PB_MIN_FOLLOW_ANGLE 0.0f
 #define PB_MAX_FOLLOW_ANGLE 6.0f
 
@@ -190,8 +190,8 @@ bool PartyBotAI::DrinkAndEat()
     if (me->GetVictim())
         return false;
 
-    bool const needToEat = me->GetHealthPercent() < 100.0f;
-    bool const needToDrink = (me->GetPowerType() == POWER_MANA) && (me->GetPowerPercent(POWER_MANA) < 100.0f);
+    bool const needToEat = me->GetHealthPercent() < float(m_personality.RecoveryThresholdPercent());
+    bool const needToDrink = (me->GetPowerType() == POWER_MANA) && (me->GetPowerPercent(POWER_MANA) < float(m_personality.RecoveryThresholdPercent()));
 
     if (!needToEat && !needToDrink)
         return false;
@@ -373,7 +373,7 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
                 ObjectGuid targetGuid = me->GetGroup()->GetTargetWithIcon(markId);
                 if (targetGuid.IsUnit())
                     if (Unit* pVictim = me->GetMap()->GetUnit(targetGuid))
-                        if (IsValidHostileTarget(pVictim))
+                        if (AcceptsTarget(pVictim, BOT_TARGET_FOCUS_MARK))
                             return pVictim;
             }
         }
@@ -381,7 +381,7 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
         // Who is the leader attacking.
         if (Unit* pVictim = pLeader->GetVictim())
         {
-            if (IsValidHostileTarget(pVictim))
+            if (AcceptsTarget(pVictim, BOT_TARGET_LEADER_VICTIM))
                 return pVictim;
         }
     }
@@ -397,7 +397,7 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
     {
         // Check if other group members are under attack.
         if (Unit* pPartyAttacker = SelectPartyAttackTarget())
-            return pPartyAttacker;
+            return AcceptsTarget(pPartyAttacker, BOT_TARGET_PARTY_ATTACKER) ? pPartyAttacker : nullptr;
     }
 
     // Assist pet if its in combat.
@@ -513,6 +513,35 @@ bool PartyBotAI::CrowdControlMarkedTargets()
     return false;
 }
 
+bool PartyBotAI::AcceptsTarget(Unit const* pTarget, BotTargetSource source) const
+{
+    if (!BotStance::WantsTargetSource(m_stance.IsPassive(), source))
+        return false;
+    if (!IsValidHostileTarget(pTarget))
+        return false;
+    return !m_stance.IsOutOfLeash(pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ());
+}
+
+void PartyBotAI::ReturnToHoldAnchor()
+{
+    if (m_stance.IsAtAnchor(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
+        return;
+
+    me->InterruptSpellsWithInterruptFlags(SPELL_INTERRUPT_FLAG_MOVEMENT);
+    me->MonsterMove(m_stance.holdX, m_stance.holdY, m_stance.holdZ);
+}
+
+void PartyBotAI::DropOutOfLeashVictim()
+{
+    me->AttackStop(true);
+    me->InterruptNonMeleeSpells(false);
+    if (!me->IsStopped())
+        me->StopMoving();
+    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
+        me->GetMotionMaster()->Clear();
+    ReturnToHoldAnchor();
+}
+
 void PartyBotAI::AddToPlayerGroup()
 {
     Player* pPlayer = ObjectAccessor::FindPlayer(m_leaderGuid);
@@ -605,7 +634,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 {
     m_updateTimer.Update(diff);
     if (m_updateTimer.Passed())
-        m_updateTimer.Reset(PB_UPDATE_INTERVAL);
+        m_updateTimer.Reset(m_personality.TickIntervalMs());
     else
         return;
 
@@ -805,7 +834,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         }
 
         // Teleport to leader if too far away.
-        if (!me->IsWithinDistInMap(pLeader, 100.0f) && !IsInDuel())
+        if (!m_stance.IsHolding() && !me->IsWithinDistInMap(pLeader, 100.0f) && !IsInDuel())
         {
             if (!me->IsStopped())
                 me->StopMoving();
@@ -884,14 +913,21 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (!me->IsMoving())
     {
-        if (!pVictim)
+        if (!pVictim && m_stance.IsHolding())
+            ReturnToHoldAnchor();
+        else if (!pVictim)
         {
             if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
-                me->GetMotionMaster()->MoveFollow(pLeader, urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
+                me->GetMotionMaster()->MoveFollow(pLeader, urand(m_stance.FollowMinDist(), m_stance.FollowMaxDist()), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
         }
         else
         {
-            if (!me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) &&
+            if (m_stance.IsHolding() && m_stance.IsOutOfLeash(pVictim->GetPositionX(), pVictim->GetPositionY(), pVictim->GetPositionZ()))
+            {
+                DropOutOfLeashVictim();
+                return;
+            }
+            else if (!me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) &&
                (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) &&
                 IsValidHostileTarget(pVictim) &&
                 AttackStart(pVictim))
@@ -926,7 +962,7 @@ void PartyBotAI::UpdateOutOfCombatAI()
             return;
     }
 
-    if (CheckForDispelTargets())
+    if (ShouldAttemptDispel() && CheckForDispelTargets())
         return;
 
     switch (me->GetClass())
@@ -970,7 +1006,7 @@ void PartyBotAI::UpdateInCombatAI()
             Unit* pVictim = me->GetVictim();
 
             // Defend party members.
-            if (!pVictim || pVictim->GetVictim() == me)
+            if ((!pVictim || pVictim->GetVictim() == me) && BotStance::WantsTargetSource(m_stance.IsPassive(), BOT_TARGET_PARTY_ATTACKER))
             {
                 if (pVictim = SelectPartyAttackTarget())
                 {
@@ -996,7 +1032,7 @@ void PartyBotAI::UpdateInCombatAI()
             return;
     }
 
-    if (CheckForDispelTargets())
+    if (ShouldAttemptDispel() && CheckForDispelTargets())
         return;
 
     switch (me->GetClass())

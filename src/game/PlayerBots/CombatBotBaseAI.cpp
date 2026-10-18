@@ -2896,6 +2896,22 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
     return result;
 }
 
+bool CombatBotBaseAI::ShouldAttemptInterrupt() const
+{
+    unsigned const percent = m_personality.InterruptAttemptPercent();
+    if (percent >= 100u)
+        return true;
+    return urand(0, 99) < percent;
+}
+
+bool CombatBotBaseAI::ShouldAttemptDispel() const
+{
+    unsigned const percent = m_personality.DispelAttemptPercent();
+    if (percent >= 100u)
+        return true;
+    return urand(0, 99) < percent;
+}
+
 bool CombatBotBaseAI::RunRotation(Unit* pVictim, BotRotationTable const& rotation)
 {
     // pVictim may be null (in combat with no victim yet): VICTIM steps
@@ -2979,9 +2995,9 @@ bool CombatBotBaseAI::MageCond_ConeOfCold(CombatBotBaseAI const* ai, Unit const*
     return !ai->me->IsMoving() && MageCond_MageAoE(ai, victim, target, spell);
 }
 
-bool CombatBotBaseAI::MageCond_Counterspell(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+bool CombatBotBaseAI::MageCond_Counterspell(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted(false, false, true);
+    return victim->IsNonMeleeSpellCasted(false, false, true) && ai->ShouldAttemptInterrupt();
 }
 
 bool CombatBotBaseAI::MageCond_Blizzard(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
@@ -3057,7 +3073,7 @@ bool CombatBotBaseAI::PaladinCond_Judgement(CombatBotBaseAI const* ai, Unit cons
 
 bool CombatBotBaseAI::PaladinCond_HammerOfJustice(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted() ||
+    return (victim->IsNonMeleeSpellCasted() && ai->ShouldAttemptInterrupt()) ||
         (ai->me->GetHealthPercent() < 20.0f && !ai->me->GetAttackers().empty());
 }
 
@@ -3106,9 +3122,9 @@ bool CombatBotBaseAI::ShamanCond_ElementalMastery(CombatBotBaseAI const* ai, Uni
     return ai->me->GetAttackers().empty();
 }
 
-bool CombatBotBaseAI::ShamanCond_EarthShock(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+bool CombatBotBaseAI::ShamanCond_EarthShock(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted(false, false, true);
+    return victim->IsNonMeleeSpellCasted(false, false, true) && ai->ShouldAttemptInterrupt();
 }
 
 bool CombatBotBaseAI::ShamanCond_FrostShock(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
@@ -3118,7 +3134,7 @@ bool CombatBotBaseAI::ShamanCond_FrostShock(CombatBotBaseAI const*, Unit const* 
 
 bool CombatBotBaseAI::ShamanCond_Purge(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const* spell)
 {
-    return ai->IsValidDispelTarget(victim, spell);
+    return ai->IsValidDispelTarget(victim, spell) && ai->ShouldAttemptDispel();
 }
 
 bool CombatBotBaseAI::ShamanCond_LightningBolt(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
@@ -3154,9 +3170,9 @@ void CombatBotBaseAI::BuildHunterRotation(BotRotationTable& core)
     core.push_back({ m_spells.hunter.pMultiShot, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
 }
 
-bool CombatBotBaseAI::PriestCond_Silence(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+bool CombatBotBaseAI::PriestCond_Silence(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted();
+    return victim->IsNonMeleeSpellCasted() && ai->ShouldAttemptInterrupt();
 }
 
 bool CombatBotBaseAI::PriestCond_PsychicScream(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
@@ -3199,7 +3215,7 @@ void CombatBotBaseAI::BuildPriestRotation(BotRotationTable& dpsPre, BotRotationT
 
 bool CombatBotBaseAI::WarlockCond_DeathCoil(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->CanReachWithMeleeAutoAttack(ai->me) || victim->IsNonMeleeSpellCasted();
+    return victim->CanReachWithMeleeAutoAttack(ai->me) || (victim->IsNonMeleeSpellCasted() && ai->ShouldAttemptInterrupt());
 }
 
 bool CombatBotBaseAI::WarlockCond_Shadowburn(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
@@ -3259,14 +3275,14 @@ void CombatBotBaseAI::BuildWarlockRotation(BotRotationTable& coreA, BotRotationT
     coreC.push_back({ m_spells.warlock.pLifeTap, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarlockCond_LifeTap });
 }
 
-bool CombatBotBaseAI::WarriorCond_Pummel(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+bool CombatBotBaseAI::WarriorCond_Pummel(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted(false, false, true);
+    return victim->IsNonMeleeSpellCasted(false, false, true) && ai->ShouldAttemptInterrupt();
 }
 
 bool CombatBotBaseAI::WarriorCond_ShieldBash(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted(false, false, true) && ai->IsWearingShield(ai->me);
+    return victim->IsNonMeleeSpellCasted(false, false, true) && ai->IsWearingShield(ai->me) && ai->ShouldAttemptInterrupt();
 }
 
 bool CombatBotBaseAI::WarriorCond_Execute(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
@@ -3281,7 +3297,7 @@ bool CombatBotBaseAI::WarriorCond_LastStand(CombatBotBaseAI const* ai, Unit cons
 
 bool CombatBotBaseAI::WarriorCond_ConcussionBlow(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted() || victim->IsMoving() || (ai->me->GetHealthPercent() < 50.0f);
+    return (victim->IsNonMeleeSpellCasted() && ai->ShouldAttemptInterrupt()) || victim->IsMoving() || (ai->me->GetHealthPercent() < 50.0f);
 }
 
 bool CombatBotBaseAI::WarriorCond_ShieldBlock(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
@@ -3371,9 +3387,9 @@ void CombatBotBaseAI::BuildWarriorRotation(BotRotationTable& coreA, BotRotationT
     coreB.push_back({ m_spells.warrior.pDemoralizingShout, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_TankSpell });
 }
 
-bool CombatBotBaseAI::RogueCond_Interrupt(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+bool CombatBotBaseAI::RogueCond_Interrupt(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted();
+    return victim->IsNonMeleeSpellCasted() && ai->ShouldAttemptInterrupt();
 }
 
 void CombatBotBaseAI::BuildRogueRotation(BotRotationTable& interrupt, BotRotationTable& builders)
@@ -3981,9 +3997,9 @@ bool CombatBotBaseAI::BattlePaladinCond_Judgement(CombatBotBaseAI const* ai, Uni
     return pSeal && ai->me->HasAura(pSeal->Id);
 }
 
-bool CombatBotBaseAI::BattlePaladinCond_HammerOfJustice(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+bool CombatBotBaseAI::BattlePaladinCond_HammerOfJustice(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
 {
-    return victim->IsNonMeleeSpellCasted();
+    return victim->IsNonMeleeSpellCasted() && ai->ShouldAttemptInterrupt();
 }
 
 bool CombatBotBaseAI::BattlePaladinCond_HolyShield(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)

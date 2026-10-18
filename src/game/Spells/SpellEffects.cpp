@@ -30,6 +30,7 @@
 #include "SpellMgr.h"
 #include "Player.h"
 #include "Spell.h"
+#include "PlayerBots/BotTelemetry.h"
 #include "DynamicObject.h"
 #include "SpellAuras.h"
 #include "Group.h"
@@ -2570,6 +2571,13 @@ void Spell::EffectDispel(SpellEffectIndex effIdx)
         // Send success log and really remove auras
         if (!successList.empty())
         {
+            // Bot telemetry: auras dispelled.
+            if (Player* pCaster = m_caster->ToPlayer())
+            {
+                if (pCaster->IsBot())
+                    BotTelemetry::Instance().RecordDispel(pCaster->GetClass(), uint32(successList.size()));
+            }
+
             int32 count = successList.size();
             WorldPacket data(SMSG_SPELLDISPELLOG, 8 + 8 + 4 + count * 4);
 #if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_12_1
