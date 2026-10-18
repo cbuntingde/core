@@ -707,7 +707,7 @@ void npc_reginald_windsorAI::UpdateAI(uint32 const uiDiff)
         case 74:
             if (Creature* Bolvar = m_creature->FindNearestCreature(NPC_BOLVAR_FORDRAGON, 150.0f))
                 DoScriptText(SAY_BOVLAR4, Bolvar, Bolvar);
-                [[fallthrough]];
+            [[fallthrough]];
         case 75:
             if (Creature* Onyxia = m_creature->FindNearestCreature(NPC_LADY_ONYXIA, 150.0f))
             {
