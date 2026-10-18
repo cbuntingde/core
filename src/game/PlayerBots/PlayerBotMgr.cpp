@@ -1749,7 +1749,7 @@ bool ChatHandler::HandlePartyBotComeToMeCommand(char* args)
     }
     else if (Group* pGroup = pPlayer->GetGroup())
     {
-        bool ok = false;
+        ok = false;
         for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
         {
             if (Player* pMember = itr->getSource())

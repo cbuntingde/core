@@ -4199,7 +4199,7 @@ void CombatBotBaseAI::BuildBattleWarriorRotation(BotRotationTable& coreA, BotRot
     coreA.push_back({ m_spells.warrior.pConcussionBlow, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_ConcussionBlow });
     coreA.push_back({ m_spells.warrior.pShieldBlock, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarriorCond_ShieldBlock });
     coreA.push_back({ m_spells.warrior.pShieldWall, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarriorCond_ShieldWall });
-    coreA.push_back({ m_spells.warrior.pShieldSlam, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_ShieldSlam });
+    coreA.push_back({ m_spells.warrior.pShieldSlam, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_ShieldSlam });
     coreA.push_back({ m_spells.warrior.pHamstring, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Hamstring });
     coreA.push_back({ m_spells.warrior.pPiercingHowl, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleWarriorCond_PiercingHowl });
     coreA.push_back({ m_spells.warrior.pRend, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleWarriorCond_Rend });

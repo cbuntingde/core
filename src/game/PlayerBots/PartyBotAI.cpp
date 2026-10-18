@@ -209,14 +209,8 @@ bool PartyBotAI::HasSafeRecoveryWindow() const
 
 bool PartyBotAI::DrinkAndEat()
 {
-    if (m_isBuffing)
-        return false;
-
-    if (me->GetVictim())
-        return false;
-
-    // Only eat and drink between pulls: never sit down while the group is
-    // fighting, and stand back up if a fight starts mid-meal.
+    // Meals need a safe window: a fight starting mid-meal stands the bot
+    // back up here, and sitting down below requires the same window.
     if (!HasSafeRecoveryWindow())
     {
         if (me->HasAura(PB_SPELL_FOOD))
@@ -225,6 +219,12 @@ bool PartyBotAI::DrinkAndEat()
             me->RemoveAurasDueToSpellByCancel(PB_SPELL_DRINK);
         return false;
     }
+
+    if (m_isBuffing)
+        return false;
+
+    if (me->GetVictim())
+        return false;
 
     bool const needToEat = me->GetHealthPercent() < float(m_personality.RecoveryThresholdPercent());
     bool const needToDrink = (me->GetPowerType() == POWER_MANA) && (me->GetPowerPercent(POWER_MANA) < float(m_personality.RecoveryThresholdPercent()));
@@ -954,7 +954,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         else if (!pVictim)
         {
             if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
-                me->GetMotionMaster()->MoveFollow(pLeader, urand(m_stance.FollowMinDist(), m_stance.FollowMaxDist()), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
+                me->GetMotionMaster()->MoveFollow(pLeader, frand(m_stance.FollowMinDist(), m_stance.FollowMaxDist()), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
         }
         else
         {
