@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       mysql:
+        # Pinned to 5.6 on purpose: DatabaseMysql.h explicitly rejects MySQL 8.x client libs, and the world-dump archive is 5.5-era syntax. Do not bump without a client-lib migration and green CI.
         image: mysql:5.6
         env:
           MYSQL_ROOT_PASSWORD: root
@@ -61,6 +62,7 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       mysql:
+        # Pinned to 5.6 on purpose: DatabaseMysql.h explicitly rejects MySQL 8.x client libs, and the world-dump archive is 5.5-era syntax. Do not bump without a client-lib migration and green CI.
         image: mysql:5.6
         env:
           MYSQL_ROOT_PASSWORD: root

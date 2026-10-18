@@ -1,0 +1,42 @@
+# Ban new escape_string callers (SQL injection gate).
+# All user-controlled SQL now uses bound prepared-statement parameters;
+# Database::escape_string is deprecated and only its own implementation,
+# the plain-statement fallback, and the dump-file writer may reference it.
+name: Ban raw SQL escaping
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    branches: [ development ]
+
+jobs:
+  ban-escape-string:
+    name: No new escape_string callers
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Fail on new escape_string callers
+        shell: bash
+        run: |
+          allowlist=$(printf '%s\n' \
+            src/shared/Database/Database.h \
+            src/shared/Database/Database.cpp \
+            src/shared/Database/DatabaseMysql.cpp \
+            src/shared/Database/DatabaseMysql.h \
+            src/shared/Database/SqlPreparedStatement.cpp \
+            src/game/PlayerDump.cpp)
+          found=$(grep -rl 'escape_string' src --include='*.cpp' --include='*.h' || true)
+          offenders=$(comm -23 \
+            <(printf '%s\n' "$found" | sort -u) \
+            <(printf '%s\n' "$allowlist" | sort -u))
+          if [ -n "$offenders" ]; then
+            echo "New escape_string caller(s) — use bound SqlStatement parameters instead:"
+            echo "$offenders"
+            exit 1
+          fi
+          echo "No new escape_string callers."
