@@ -4,6 +4,7 @@
 add_executable(vmangos_tests
     TestMain.cpp
     DatabaseTests.cpp
+    QueryResultStmtTests.cpp
     BotTelemetryTests.cpp
     BotStanceTests.cpp
     BotPersonalityTests.cpp

@@ -595,6 +595,7 @@ void instance_naxxramas::OnObjectCreate(GameObject* pGo)
             break;
         case GO_CONS_GLUT_EXIT_DOOR:
             UpdateBossGate(pGo, m_auiEncounter[TYPE_GLUTH]);
+            [[fallthrough]];
         case GO_CONS_THAD_DOOR:
             UpdateManualDoor(pGo, m_auiEncounter[TYPE_GLUTH]);
             break;

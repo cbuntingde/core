@@ -27,8 +27,9 @@ QueryResultMysql::QueryResultMysql(MYSQL_RES* result, MYSQL_FIELD* fields, uint6
     QueryResult(rowCount, fieldCount), mResult(result)
 {
 
-    mCurrentRow = new Field[mFieldCount];
-    MANGOS_ASSERT(mCurrentRow);
+    mRowStorage = std::make_unique<Field[]>(mFieldCount);
+    MANGOS_ASSERT(mRowStorage);
+    mCurrentRow = mRowStorage.get();
 
     for (uint32 i = 0; i < mFieldCount; i++)
         mCurrentRow[i].SetType(ConvertNativeType(fields[i].type));
@@ -61,11 +62,8 @@ bool QueryResultMysql::NextRow()
 
 void QueryResultMysql::EndQuery()
 {
-    if (mCurrentRow)
-    {
-        delete [] mCurrentRow;
-        mCurrentRow = 0;
-    }
+    mRowStorage.reset();
+    mCurrentRow = nullptr;
 
     if (mResult)
     {
@@ -79,7 +77,7 @@ QueryResultStmt::QueryResultStmt(RowVec rows, std::vector<enum Field::DataTypes>
 {
     MANGOS_ASSERT(types.size() == mFieldCount);
 
-    mFields = new Field[mFieldCount];
+    mFields = std::make_unique<Field[]>(mFieldCount);
     MANGOS_ASSERT(mFields);
 
     for (uint32 i = 0; i < mFieldCount; ++i)
@@ -103,17 +101,13 @@ bool QueryResultStmt::NextRow()
     RowCells const& cells = mRows[mRowIndex];
     for (uint32 i = 0; i < mFieldCount; ++i)
         mFields[i].SetValue(cells[i].isNull ? nullptr : cells[i].value.c_str());
-    mCurrentRow = mFields;
+    mCurrentRow = mFields.get();
     return true;
 }
 
 void QueryResultStmt::EndQuery()
 {
-    if (mFields)
-    {
-        delete [] mFields;
-        mFields = nullptr;
-    }
+    mFields.reset();
 
     mCurrentRow = nullptr;
 }

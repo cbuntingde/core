@@ -433,7 +433,7 @@ struct npc_areiAI : public npc_escortAI
         {
             case NPC_IRONTREE_STOMPER:
                 DoScriptText(SAY_EXIT_WOODS, m_creature, pSummoned);
-            // no break;
+            [[fallthrough]];
             case NPC_IRONTREE_WANDERER:
                 pSummoned->AI()->AttackStart(m_creature);
                 m_lSummonsGuids.push_back(pSummoned->GetObjectGuid());

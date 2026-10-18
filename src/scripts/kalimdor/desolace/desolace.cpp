@@ -797,6 +797,7 @@ struct npc_cork_gizeltonAI : npc_escortAI
             case NPC_RIGGER_GIZELTON:
                 m_RiggerGuid = pSummoned->GetObjectGuid();
                 pSummoned->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+                [[fallthrough]];
             case NPC_CARAVAN_KODO:
                 m_lCaravanGuid.push_back(pSummoned->GetObjectGuid());
                 break;

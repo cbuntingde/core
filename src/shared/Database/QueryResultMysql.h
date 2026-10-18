@@ -24,6 +24,8 @@
 
 #include "Common.h"
 
+#include <memory>
+
 #ifdef WIN32
 #include <winsock2.h>
 #endif
@@ -58,7 +60,7 @@ class QueryResultStmt : public QueryResult
 
         RowVec mRows;
         size_t mRowIndex;
-        Field* mFields;
+        std::unique_ptr<Field[]> mFields;
 };
 
 class QueryResultMysql : public QueryResult
@@ -76,5 +78,7 @@ class QueryResultMysql : public QueryResult
         void EndQuery();
 
         MYSQL_RES* mResult;
+        // Owns the row array published through the base-class view below.
+        std::unique_ptr<Field[]> mRowStorage;
 };
 #endif

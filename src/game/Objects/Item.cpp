@@ -271,7 +271,7 @@ void Item::SaveToDB()
                 stmt.PExecute(GetOwnerGuid().GetCounter(), GetGUIDLow());
             }
         }
-        // no break
+        [[fallthrough]];
         case ITEM_NEW:
         {
             static SqlStatementID insItem;

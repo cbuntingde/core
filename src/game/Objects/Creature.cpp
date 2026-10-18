@@ -431,7 +431,7 @@ bool Creature::InitEntry(uint32 entry, GameEventCreatureData const* eventData /*
             ApplySpellImmune(0, IMMUNITY_EFFECT, SPELL_EFFECT_HEAL_MAX_HEALTH, true);
             ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_PERIODIC_HEAL, true);
             ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_PERIODIC_LEECH, true);
-            // no break
+            [[fallthrough]];
         }
         case CREATURE_TYPE_ELEMENTAL:
         {
@@ -1060,6 +1060,7 @@ void Creature::Update(uint32 update_diff, uint32 diff)
         case CORPSE_FALLING:
         {
             SetDeathState(CORPSE);
+            [[fallthrough]];
         }
         default:
             break;

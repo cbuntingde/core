@@ -343,7 +343,7 @@ SqlPreparedStatement* MySQLConnection::CreateStatement(std::string const& fmt)
 
 //////////////////////////////////////////////////////////////////////////
 MySqlPreparedStatement::MySqlPreparedStatement(std::string const& fmt, SqlConnection& conn, MYSQL* mysql) : SqlPreparedStatement(fmt, conn),
-    m_pMySQLConn(mysql), m_stmt(nullptr), m_pInputArgs(nullptr), m_pResult(nullptr), m_pResultMetadata(nullptr)
+    m_pMySQLConn(mysql), m_stmt(nullptr), m_pInputArgs(nullptr), m_pResultMetadata(nullptr)
 {
 }
 
@@ -402,8 +402,7 @@ bool MySqlPreparedStatement::prepare()
     //bind input buffers
     if(m_nParams)
     {
-        m_pInputArgs = new MYSQL_BIND[m_nParams];
-        memset(m_pInputArgs, 0, sizeof(MYSQL_BIND) * m_nParams);
+        m_pInputArgs = std::make_unique<MYSQL_BIND[]>(m_nParams);
     }
 
     //check if we have a statement which returns result sets
@@ -451,7 +450,7 @@ void MySqlPreparedStatement::bind(SqlStmtParameters const& holder)
     }
 
     //bind input arguments
-    if (mysql_stmt_bind_param(m_stmt, m_pInputArgs))
+    if (mysql_stmt_bind_param(m_stmt, m_pInputArgs.get()))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: mysql_stmt_bind_param() failed\n");
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
@@ -481,16 +480,13 @@ void MySqlPreparedStatement::RemoveBinds()
     if(!m_stmt)
         return;
 
-    delete [] m_pInputArgs;
-    delete [] m_pResult;
+    m_pInputArgs.reset();
 
     mysql_free_result(m_pResultMetadata);
     mysql_stmt_close(m_stmt);
 
     m_stmt = nullptr;
     m_pResultMetadata = nullptr;
-    m_pResult = nullptr;
-    m_pInputArgs = nullptr;
 
     m_bPrepared = false;
 }
@@ -560,7 +556,7 @@ std::unique_ptr<QueryResult> MySqlPreparedStatement::query()
     std::vector<MYSQL_BIND> outBinds(nFields);
     for(uint32 i = 0; i < nFields; ++i)
     {
-        buffers[i].reset(new char[pFields[i].max_length + 1]);
+        buffers[i] = std::make_unique<char[]>(pFields[i].max_length + 1);
         outBinds[i].buffer_type = MYSQL_TYPE_STRING;
         outBinds[i].buffer = buffers[i].get();
         outBinds[i].buffer_length = pFields[i].max_length + 1;

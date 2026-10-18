@@ -282,7 +282,7 @@ struct instance_blackwing_lair : public ScriptedInstance
                 break;
             case GO_ORB_OF_DOMINATION:
                 m_auiData[DATA_ORB_DOMINATION_GUID] = pGo->GetObjectGuid();
-                // no break - intended?
+                [[fallthrough]];
             case GO_BLACK_DRAGON_EGG:
                 if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
                     pGo->DeleteLater();
@@ -487,7 +487,7 @@ struct instance_blackwing_lair : public ScriptedInstance
                 break;
             case NPC_GRETHOK_THE_CONTROLLER:
                 m_auiData[DATA_GRETOK_GUID] = pCreature->GetObjectGuid();
-                // no break - intended?
+                [[fallthrough]];
             case NPC_BLACKWING_GUARDSMAN:
                 if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
                     pCreature->DeleteLater();
@@ -568,8 +568,8 @@ struct instance_blackwing_lair : public ScriptedInstance
                     if (m_auiEncounter[TYPE_RAZORGORE] != DONE)
                         pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
                     m_lVaelGobs.push_back(pCreature->GetObjectGuid());
-                    // no break - intended?
                  }
+                [[fallthrough]];
             case NPC_BLACKWING_WARLOCK:
             case NPC_BLACKWING_SPELLBINDER:
             case NPC_DEATH_TALON_WYRMGUARD:

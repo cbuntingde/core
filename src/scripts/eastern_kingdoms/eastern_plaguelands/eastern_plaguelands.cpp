@@ -280,7 +280,7 @@ struct npc_eris_havenfireAI : public ScriptedAI
                 break;
             case NPC_PEASANT_1:
                 summoned->CastSpell(summoned, SPELL_SEETHING_PLAGUE, true);
-            // no break
+            [[fallthrough]];
             case NPC_PEASANT_0:
                 while (m_villagerGUIDs[j] && j < 49)
                     ++j;
@@ -1109,7 +1109,7 @@ struct go_darrowshire_triggerAI : public GameObjectAI
             case NPC_SILVERHAND_DISCIPLE:
             case NPC_REDPATH_MILITIA:
                 summoned->SetFactionTemplateId(m_defenderFaction);
-            // no break
+            [[fallthrough]];
             case NPC_MARAUDING_CORPSE:
             case NPC_MARAUDING_SKELETON:
             case NPC_SERVANT_OF_HORGUS:

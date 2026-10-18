@@ -1323,6 +1323,7 @@ bool WorldSession::AllowPacket(uint16 opcode)
         case CMSG_GMTICKET_UPDATETEXT:
             m_floodPacketsCount[FLOOD_VERY_SLOW_OPCODES]++;
         // no break, since slow packets are also very slow packets.
+        [[fallthrough]];
         case CMSG_LOGOUT_REQUEST:
         case CMSG_ADD_FRIEND:
         case CMSG_DEL_FRIEND:

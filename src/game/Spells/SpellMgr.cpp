@@ -3171,6 +3171,7 @@ namespace SpellInternal
                         case SPELL_AURA_POWER_BURN_MANA:
                         case SPELL_AURA_PERIODIC_TRIGGER_SPELL:
                             periodic = true;
+                            [[fallthrough]];
                         default:
                             break;
                     }

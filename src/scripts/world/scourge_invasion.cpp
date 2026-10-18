@@ -884,6 +884,7 @@ struct npc_cultist_engineer : public ScriptedAI
                         pShard->AddAura(SPELL_BUTTRESS_CHANNEL);
                     }
                 }
+                [[fallthrough]];
                 default:
                     break;
             }

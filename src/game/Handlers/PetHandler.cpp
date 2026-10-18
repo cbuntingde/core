@@ -91,7 +91,7 @@ void WorldSession::HandlePetAction(WorldPackets::Pet::PetAction const& packet)
                 case REACT_PASSIVE:                         //passive
                     pCharmedUnit->InterruptNonMeleeSpells(false);
                     pCharmedUnit->AttackStop();
-                // no break
+                    [[fallthrough]];
                 case REACT_DEFENSIVE:                       //recovery
                 case REACT_AGGRESSIVE:                      //activete
                     charmInfo->SetReactState(ReactStates(spellid));
