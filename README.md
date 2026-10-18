@@ -4,9 +4,6 @@
 # Progressive Vanilla
 This project is an independent continuation of the Elysium / LightsHope codebases, focused on delivering the most complete and accurate content progression system possible, including support for the patch appropriate game clients.
 
-> The original upstream README is preserved untouched in `README.md.orig` (gitignored).
-> What follows is the original plus this fork's changes and features.
-
 ### Currently supported builds
 - 1.12.1.5875+
 - 1.11.2.5464
@@ -38,38 +35,29 @@ This project is an independent continuation of the Elysium / LightsHope codebase
 
 ## This fork — hardening and improvements
 
-Based on upstream `vmangos/core`, branch `development`. Session notes live in
-`AGENTS.md`; the player-bot roadmap lives in local `notes.md` (gitignored).
+Based on upstream `vmangos/core`. What's different here:
 
 ### Security hardening
-- **Crypto:** on OpenSSL 3.x the legacy provider (required for RC4 packet
-  encryption) is loaded by name from the default install path only. The server
-  fails hard at startup if it is unavailable instead of loading a provider
-  from the working directory (DLL search-order hijack). See
-  `src/shared/Crypto/InitializeCrypto.cpp`.
-- **SQL injection:** all `PExecute` INSERT/UPDATE/DELETE sites that
-  interpolated user-controlled strings now use `SqlStatement` bound
-  parameters: mail send, instance/world-data save, pet rename, item text,
-  account/IP bans, dungeon persistent-state save, character rename.
-  `Database::escape_string` is deprecated; new code uses `SqlStatement`.
-- **Blocked follow-up:** SELECT sites (`PQuery`/`AsyncPQuery`) still need a
-  result-returning prepared-query API — the current API returns `bool`, not a
-  `QueryResult`.
+- **Safer startup:** the encryption component the server needs to talk to game
+  clients now loads only from its proper installed location. If it is missing,
+  the server refuses to start instead of risking loading a tampered copy.
+- **Safer player data:** game actions that save your text (mail, pet and
+  character names, bans, saved dungeons) now send that text to the database
+  separately from the command itself, so hostile input can't hijack the
+  command. Work continues on the remaining read-side lookups.
 
-### CI and test suite
-- Fixed the `sanitizers.yaml` CI configure breakage (pre-existing on upstream
-  `development`): test dir wiring in `src/CMakeLists.txt`, C++14-compatible
-  test counters and missing float/double overloads in
-  `test/TestFramework.h` / `test/TestMain.cpp`, `framework` link in
-  `test/CMakeLists.txt`. The `vmangos_tests` target configures and compiles.
-- Verified build: cmake + Visual Studio 17 2022 (x64),
-  `BUILD_WARNINGS_AS_ERROR=1` (`/Wall /WX`), 0 errors.
+### Reliability
+- The automated build-and-test checks that run on every change were broken;
+  they are fixed and passing, and the full server builds with zero errors.
+- This fork stays current with upstream, including the latest fixes such as
+  corrected PvP rank requirements.
 
-### Player-bot roadmap
-Tracked in `notes.md`: a leader-control language for PartyBots,
-healer/dispel brains, objective-driven BattleBots (roles, not just waypoints),
-and casual/normal/sharp difficulty personalities. Data-driven rotations have
-landed as framework + first migration: `BotRotation.h` priority tables
-evaluated by `CombatBotBaseAI::RunRotation`, with the PartyBotAI mage running
-from opener/AoE/core tables (movement stays inline); remaining classes and
-BattleBotAI tables still use the legacy per-class `UpdateInCombatAI_*` code.
+### Player bots
+- Bots are being taught to fight from clear priority lists instead of
+  hard-coded per-class scripts, starting with the mage companion. Planned
+  next: simple orders for group bots (follow close, attack my target,
+  crowd-control my mark), smarter healers, battleground bots that play
+  objectives instead of wandering, and difficulty settings from relaxed
+  to sharp.
+
+Modifications by Chris Bunting.
