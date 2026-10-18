@@ -182,6 +182,31 @@ bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
     return me->GetMotionMaster()->MoveDistance(pEnemy, 15.0f);
 }
 
+bool PartyBotAI::HasSafeRecoveryWindow() const
+{
+    // A meal is safe only when nobody is swinging at the bot and nobody in
+    // the group is fighting. Cheap checks only (no radius scans) so this
+    // stays free on every out-of-combat tick.
+    if (!me->GetAttackers().empty())
+        return false;
+
+    if (Group* pGroup = me->GetGroup())
+    {
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            if (Player* pMember = itr->getSource())
+            {
+                if (pMember == me)
+                    continue;
+                if (pMember->IsInCombat())
+                    return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 bool PartyBotAI::DrinkAndEat()
 {
     if (m_isBuffing)
@@ -189,6 +214,17 @@ bool PartyBotAI::DrinkAndEat()
 
     if (me->GetVictim())
         return false;
+
+    // Only eat and drink between pulls: never sit down while the group is
+    // fighting, and stand back up if a fight starts mid-meal.
+    if (!HasSafeRecoveryWindow())
+    {
+        if (me->HasAura(PB_SPELL_FOOD))
+            me->RemoveAurasDueToSpellByCancel(PB_SPELL_FOOD);
+        if (me->HasAura(PB_SPELL_DRINK))
+            me->RemoveAurasDueToSpellByCancel(PB_SPELL_DRINK);
+        return false;
+    }
 
     bool const needToEat = me->GetHealthPercent() < float(m_personality.RecoveryThresholdPercent());
     bool const needToDrink = (me->GetPowerType() == POWER_MANA) && (me->GetPowerPercent(POWER_MANA) < float(m_personality.RecoveryThresholdPercent()));

@@ -1,5 +1,6 @@
 #include "World.h"
 #include "CombatBotBaseAI.h"
+#include "BotHealer.h"
 #include "ObjectMgr.h"
 #include "Player.h"
 #include "Group.h"
@@ -1991,14 +1992,21 @@ bool CombatBotBaseAI::IsValidHealTarget(Unit const* pTarget, float healthPercent
 
 Unit* CombatBotBaseAI::SelectHealTarget(float selfHealPercent, float groupHealPercent) const
 {
-    if (me->GetHealthPercent() < selfHealPercent)
-        return me;
-
-    if (IsInDuel())
-        return nullptr;
-
+    // Self joins the same lowest-health race instead of short-circuiting,
+    // so a hurt healer no longer starves a dying tank.
     Unit* pTarget = nullptr;
     float healthPercent = 100.0f;
+    bool bestIsTank = false;
+
+    if (me->GetHealthPercent() < selfHealPercent)
+    {
+        pTarget = me;
+        healthPercent = me->GetHealthPercent();
+        bestIsTank = IsTankClass(me->GetClass());
+    }
+
+    if (IsInDuel())
+        return pTarget;
 
     if (Group* pGroup = me->GetGroup())
     {
@@ -2014,14 +2022,21 @@ Unit* CombatBotBaseAI::SelectHealTarget(float selfHealPercent, float groupHealPe
                 if (pTarget && !IsTankClass(pMember->GetClass()) && AreOthersOnSameTarget(pMember->GetObjectGuid(), false, true))
                     continue;
 
-                // Check if we should heal party member.
-                if ((IsValidHealTarget(pMember, groupHealPercent) &&
-                    healthPercent > pMember->GetHealthPercent()) ||
-                    // Or a pet if there are no injured players.
-                    (!pTarget && (pMember = pMember->GetPet()) &&
-                      IsValidHealTarget(pMember, groupHealPercent)))
+                // Check if we should heal party member: lowest health wins,
+                // tanks break ties (see BotHealer).
+                if (IsValidHealTarget(pMember, groupHealPercent) &&
+                    BotHealer::WantsTriageTarget(pMember->GetHealthPercent(), IsTankClass(pMember->GetClass()), healthPercent, bestIsTank))
                 {
                     healthPercent = pMember->GetHealthPercent();
+                    bestIsTank = IsTankClass(pMember->GetClass());
+                    pTarget = pMember;
+                }
+                // Or a pet if there are no injured players.
+                else if (!pTarget && (pMember = pMember->GetPet()) &&
+                    IsValidHealTarget(pMember, groupHealPercent))
+                {
+                    healthPercent = pMember->GetHealthPercent();
+                    bestIsTank = false;
                     pTarget = pMember;
                 }
             }
@@ -2118,7 +2133,9 @@ bool CombatBotBaseAI::FindAndPreHealTarget()
         }
     }
 
-    return pTarget;
+    // No cast happened: report failure so the tick falls through to the
+    // normal heal and combat behavior instead of idling.
+    return false;
 }
 
 bool CombatBotBaseAI::IsValidHostileTarget(Unit const* pTarget) const
@@ -2312,6 +2329,12 @@ Player* CombatBotBaseAI::SelectBuffTarget(SpellEntry const* pSingleSpellEntry, S
 
 Player* CombatBotBaseAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
 {
+    // Dispel the dying first; tanks break ties. The first valid target
+    // seeds the race instead of winning it outright (see BotHealer).
+    Player* pTarget = nullptr;
+    float bestHealth = 100.0f;
+    bool bestIsTank = false;
+
     Group* pGroup = me->GetGroup();
     if (pGroup)
     {
@@ -2323,13 +2346,18 @@ Player* CombatBotBaseAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
                    !pMember->IsGameMaster() &&
                     IsValidDispelTarget(pMember, pSpellEntry) &&
                     me->IsWithinLOSInMap(pMember) &&
-                    me->IsWithinDist(pMember, 30.0f))
-                    return pMember;
+                    me->IsWithinDist(pMember, 30.0f) &&
+                    BotHealer::WantsTriageTarget(pMember->GetHealthPercent(), IsTankClass(pMember->GetClass()), bestHealth, bestIsTank))
+                {
+                    pTarget = pMember;
+                    bestHealth = pMember->GetHealthPercent();
+                    bestIsTank = IsTankClass(pMember->GetClass());
+                }
             }
         }
     }
 
-    return nullptr;
+    return pTarget;
 }
 
 void CombatBotBaseAI::SummonPetIfNeeded()

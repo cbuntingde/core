@@ -1,39 +1,46 @@
 # vMaNGOS Core — Hardened Fork
 
-A vanilla World of Warcraft game server, hardened and improved: safer
-startup, safer handling of what players type in game, fully tested builds,
-and player bots that are learning to fight properly.
+A vanilla World of Warcraft game server, hardened and improved: bots that
+fight alongside you like a real group, safer startup, safer handling of
+what players type in game, and fully tested builds.
 
-## Changes
+## Player bots
 
-### Safer startup
-- The encryption component the server needs to talk to game clients now
-  loads only from its proper installed location. If it is missing, the
-  server refuses to start instead of risking loading a tampered copy.
-
-### Safer player data
-- Game actions that save your text (mail, pet and character names, bans,
-  saved dungeons) now send that text to the database separately from the
-  command itself, so hostile input can't hijack the command. Work continues
-  on the remaining read-side lookups.
-
-### Tested builds
-- The automated build-and-test checks that run on every change were broken;
-  they are fixed and passing, and the full server builds with zero errors.
-
-### Player bots
-- Bots are being taught to fight from clear priority lists instead of
-  hard-coded per-class scripts, for every class, in groups and in battlegrounds.
-- Group bots now take simple orders from the bot panel or chat: follow
+- Bots fight from clear priority lists for every class, in dungeons and
+  in battlegrounds.
+- Give simple orders by chat or with the included clickable panel: follow
   closely or at a distance, hold position, stay quiet unless attacked,
   help again, attack your target, mark targets to focus or
-  crowd-control, and come to you. Each bot can also play relaxed,
-  steady, or sharp from the panel's Skill buttons: relaxed bots react
-  slower and let more enemy spells through, sharp bots contest every
-  cast and shake off every curse they can. Planned next: smarter
-  healers and battleground bots that play objectives instead of wandering.
-- Fixed battleground mages casting polymorph on their current target when
-  they meant to sheep an extra attacker; they now sheep the extra attacker.
+  crowd-control, and come to you.
+- Set each bot's pace: relaxed bots react slower and let more enemy
+  spells through, steady bots play like an average groupmate, sharp bots
+  contest every cast and shake off everything they can.
+- Healer bots watch the whole group and treat the most hurt first. Bots
+  only sit down to eat and drink when nobody is fighting.
+- Battleground mages now sheep the extra attacker instead of the target
+  everyone is already hitting.
+- The download includes an optional add-on that adds the clickable
+  panel; its own readme explains how to switch it on.
+
+## Safer server
+
+- The encryption the server needs to talk to game clients loads only
+  from its proper installed location. If it is missing, the server
+  refuses to start instead of risking a tampered copy.
+- Things you type in game (mail, pet and character names, bans, saved
+  dungeons) travel to the database separately from the command itself,
+  so hostile input can't hijack the command. The same protection is on
+  its way to the remaining search boxes.
+
+## Tested builds
+
+- The automatic build-and-test checks that run on every change were
+  broken; they are fixed and passing, and the full server builds with
+  zero errors.
+
+## Still to come
+
+- Battleground bots that play the objectives instead of wandering.
 
 ## How to play
 

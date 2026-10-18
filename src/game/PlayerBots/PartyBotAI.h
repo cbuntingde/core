@@ -60,6 +60,7 @@ public:
     Unit* GetMarkedTarget(RaidTargetIcon mark) const;
     bool CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit const* pTarget) const override;
     bool DrinkAndEat();
+    bool HasSafeRecoveryWindow() const;
     bool ShouldAutoRevive() const;
     bool IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy);
     Unit* GetDistancingTarget(Unit* pEnemy);
