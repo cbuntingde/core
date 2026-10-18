@@ -21,6 +21,7 @@
 
 #include <errmsg.h>
 #include <mysqld_error.h>
+#include <type_traits>
 #include "Log.h"
 #include "Errors.h"
 #include "Util.h"
@@ -552,7 +553,13 @@ std::unique_ptr<QueryResult> MySqlPreparedStatement::query()
     //so fetched values fit without truncation
     std::vector<std::unique_ptr<char[]>> buffers(nFields);
     std::vector<unsigned long> lengths(nFields);
-    std::vector<my_bool> isNull(nFields), isError(nFields);
+    // MYSQL_BIND::is_null and ::error are my_bool* (char) in the Windows client
+    // headers but bool* in the Linux ones, so take the indicator type from the
+    // field instead of assuming my_bool. Plain arrays rather than
+    // std::vector<bool>, whose proxy reference cannot be address-taken.
+    typedef std::remove_pointer<decltype(MYSQL_BIND::is_null)>::type NullIndicator;
+    std::unique_ptr<NullIndicator[]> isNull = std::make_unique<NullIndicator[]>(nFields);
+    std::unique_ptr<NullIndicator[]> isError = std::make_unique<NullIndicator[]>(nFields);
     std::vector<MYSQL_BIND> outBinds(nFields);
     for(uint32 i = 0; i < nFields; ++i)
     {
