@@ -20,6 +20,7 @@
 #define SQLPREPAREDSTATEMENTS_H
 
 #include "Common.h"
+#include <memory>
 #include <vector>
 #include <stdexcept>
 
@@ -207,6 +208,56 @@ class SqlStatement
         bool Execute();
         bool DirectExecute();
 
+        //synchronous prepared SELECT returning the result set;
+        //bind parameters with add*() first, or use a PQuery(param...) helper
+        std::unique_ptr<QueryResult> PQuery();
+
+        //templates to simplify 1-5 parameter bindings
+        template<typename ParamType1>
+        std::unique_ptr<QueryResult> PQuery(ParamType1 param1)
+        {
+            arg(param1);
+            return PQuery();
+        }
+
+        template<typename ParamType1, typename ParamType2>
+        std::unique_ptr<QueryResult> PQuery(ParamType1 param1, ParamType2 param2)
+        {
+            arg(param1);
+            arg(param2);
+            return PQuery();
+        }
+
+        template<typename ParamType1, typename ParamType2, typename ParamType3>
+        std::unique_ptr<QueryResult> PQuery(ParamType1 param1, ParamType2 param2, ParamType3 param3)
+        {
+            arg(param1);
+            arg(param2);
+            arg(param3);
+            return PQuery();
+        }
+
+        template<typename ParamType1, typename ParamType2, typename ParamType3, typename ParamType4>
+        std::unique_ptr<QueryResult> PQuery(ParamType1 param1, ParamType2 param2, ParamType3 param3, ParamType4 param4)
+        {
+            arg(param1);
+            arg(param2);
+            arg(param3);
+            arg(param4);
+            return PQuery();
+        }
+
+        template<typename ParamType1, typename ParamType2, typename ParamType3, typename ParamType4, typename ParamType5>
+        std::unique_ptr<QueryResult> PQuery(ParamType1 param1, ParamType2 param2, ParamType3 param3, ParamType4 param4, ParamType5 param5)
+        {
+            arg(param1);
+            arg(param2);
+            arg(param3);
+            arg(param4);
+            arg(param5);
+            return PQuery();
+        }
+
         //templates to simplify 1-4 parameter bindings
         template<typename ParamType1>
         bool PExecute(ParamType1 param1)
@@ -327,6 +378,9 @@ class SqlPreparedStatement
         //execute statement w/o result set
         virtual bool execute() = 0;
 
+        //execute statement and return the result set (for SELECT statements)
+        virtual std::unique_ptr<QueryResult> query() = 0;
+
     protected:
         SqlPreparedStatement(std::string const& fmt, SqlConnection& conn) : m_nParams(0), m_nColumns(0), m_bIsQuery(false), m_bPrepared(false), m_szFmt(fmt), m_pConn(conn) {}
 
@@ -352,6 +406,8 @@ class SqlPlainPreparedStatement : public SqlPreparedStatement
         void bind(SqlStmtParameters const& holder) override;
 
         bool execute() override;
+
+        std::unique_ptr<QueryResult> query() override;
 
     protected:
         void DataToString(SqlStmtFieldData const& data, std::ostringstream& fmt);

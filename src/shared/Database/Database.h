@@ -73,6 +73,7 @@ class SqlConnection
 
         //methods to work with prepared statements
         bool ExecuteStmt(int nIndex, SqlStmtParameters const& id);
+        std::unique_ptr<QueryResult> QueryStmt(int nIndex, SqlStmtParameters const& id);
 
         std::string const& DatabaseName() const { return m_database; }
 
@@ -317,6 +318,8 @@ class Database
         //query function for prepared statements
         bool ExecuteStmt(SqlStatementID const& id, SqlStmtParameters* params);
         bool DirectExecuteStmt(SqlStatementID const& id, SqlStmtParameters* params);
+        //synchronous prepared SELECT; runs on the sync query connection pool
+        std::unique_ptr<QueryResult> QueryStmt(SqlStatementID const& id, SqlStmtParameters* params);
 
         //connection helper counters
         int m_nQueryConnPoolSize;                                           // Current size of query connection pool

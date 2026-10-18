@@ -192,8 +192,10 @@ AccountOpResult AccountMgr::ChangePassword(uint32 accid, std::string new_passwd,
 
 uint32 AccountMgr::GetId(std::string username)
 {
-    LoginDatabase.escape_string(username);
-    std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `id` FROM `account` WHERE `username` = '%s'", username.c_str());
+    static SqlStatementID queryAccountId;
+    SqlStatement stmt = LoginDatabase.CreateStatement(queryAccountId, "SELECT `id` FROM `account` WHERE `username` = ?");
+    stmt.addString(username);
+    std::unique_ptr<QueryResult> result = stmt.PQuery();
     if (!result)
         return 0;
 

@@ -122,6 +122,22 @@ bool SqlConnection::Initialize(std::string const& infoString)
     return OpenConnection(false);
 }
 
+std::unique_ptr<QueryResult> SqlConnection::QueryStmt(int nIndex, SqlStmtParameters const& id)
+{
+    if(nIndex == -1)
+        return nullptr;
+
+    //get prepared statement object
+    if (SqlPreparedStatement* pStmt = GetStmt(nIndex))
+    {
+        //bind parameters
+        pStmt->bind(id);
+        //execute statement and return the result set
+        return pStmt->query();
+    }
+    return nullptr;
+}
+
 bool SqlConnection::ExecuteStmt(int nIndex, SqlStmtParameters const& id)
 {
     if(nIndex == -1)
@@ -665,6 +681,15 @@ bool Database::ExecuteStmt(SqlStatementID const& id, SqlStmtParameters* params)
     }
 
     return true;
+}
+
+std::unique_ptr<QueryResult> Database::QueryStmt(SqlStatementID const& id, SqlStmtParameters* params)
+{
+    MANGOS_ASSERT(params);
+    std::unique_ptr<SqlStmtParameters> p(params);
+    //synchronous SELECTs run on the sync query connection pool
+    SqlConnection::Lock _guard(getQueryConnection());
+    return _guard->QueryStmt(id.ID(), *params);
 }
 
 bool Database::DirectExecuteStmt(SqlStatementID const& id, SqlStmtParameters* params)

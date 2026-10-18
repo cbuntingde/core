@@ -57,6 +57,9 @@ public:
     //execute DML statement
     bool execute() override;
 
+    //execute SELECT statement and return the result set
+    std::unique_ptr<QueryResult> query() override;
+
 protected:
     //bind parameters
     void addParam(int nIndex, SqlStmtFieldData const& data);

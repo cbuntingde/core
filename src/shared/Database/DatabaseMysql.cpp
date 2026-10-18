@@ -376,6 +376,16 @@ bool MySqlPreparedStatement::prepare()
         return false;
     }
 
+    //ask the client to refresh per-column maximum lengths on store, so
+    //prepared SELECT fetches can size their output buffers from them
+    my_bool updateMaxLength = 1;
+    if(mysql_stmt_attr_set(m_stmt, STMT_ATTR_UPDATE_MAX_LENGTH, &updateMaxLength))
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: mysql_stmt_attr_set() failed for '%s'", m_szFmt.c_str());
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        return false;
+    }
+
     /* Get the parameter count from the statement */
     m_nParams = mysql_stmt_param_count(m_stmt);
 
@@ -498,6 +508,114 @@ bool MySqlPreparedStatement::execute()
     }
 
     return true;
+}
+
+std::unique_ptr<QueryResult> MySqlPreparedStatement::query()
+{
+    if(!isPrepared())
+        return nullptr;
+
+    if(mysql_stmt_execute(m_stmt))
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: cannot execute '%s'", m_szFmt.c_str());
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        return nullptr;
+    }
+
+    if(mysql_stmt_store_result(m_stmt))
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: cannot store result of '%s'", m_szFmt.c_str());
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        return nullptr;
+    }
+
+    uint64 rowCount = mysql_stmt_num_rows(m_stmt);
+    uint32 fieldCount = mysql_stmt_field_count(m_stmt);
+    if(!rowCount || !fieldCount)
+    {
+        //empty result sets report no rows, like MySQLConnection::Query;
+        //zero columns means this was not a SELECT statement at all
+        if(!fieldCount)
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: prepared query '%s' returned no columns; is it a SELECT?", m_szFmt.c_str());
+        mysql_stmt_free_result(m_stmt);
+        return nullptr;
+    }
+
+    MYSQL_RES* pMeta = mysql_stmt_result_metadata(m_stmt);
+    if(!pMeta)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        mysql_stmt_free_result(m_stmt);
+        return nullptr;
+    }
+
+    uint32 nFields = mysql_num_fields(pMeta);
+    MYSQL_FIELD* pFields = mysql_fetch_fields(pMeta);
+
+    //size output buffers from the stored per-column maximum lengths,
+    //so fetched values fit without truncation
+    std::vector<std::unique_ptr<char[]>> buffers(nFields);
+    std::vector<unsigned long> lengths(nFields);
+    std::vector<my_bool> isNull(nFields), isError(nFields);
+    std::vector<MYSQL_BIND> outBinds(nFields);
+    for(uint32 i = 0; i < nFields; ++i)
+    {
+        buffers[i].reset(new char[pFields[i].max_length + 1]);
+        outBinds[i].buffer_type = MYSQL_TYPE_STRING;
+        outBinds[i].buffer = buffers[i].get();
+        outBinds[i].buffer_length = pFields[i].max_length + 1;
+        outBinds[i].length = &lengths[i];
+        outBinds[i].is_null = &isNull[i];
+        outBinds[i].error = &isError[i];
+    }
+
+    std::unique_ptr<QueryResultStmt> result;
+    if(mysql_stmt_bind_result(m_stmt, &outBinds[0]))
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: mysql_stmt_bind_result() failed\n");
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+    }
+    else
+    {
+        QueryResultStmt::RowVec rows;
+        rows.reserve((size_t)rowCount);
+        std::vector<enum Field::DataTypes> types;
+        for(uint32 i = 0; i < nFields; ++i)
+            types.push_back(QueryResultMysql::ConvertNativeType(pFields[i].type));
+
+        bool fetchOk = true;
+        int fetchState = 0;
+        while((fetchState = mysql_stmt_fetch(m_stmt)) == 0)
+        {
+            QueryResultStmt::RowCells cells;
+            for(uint32 i = 0; i < nFields; ++i)
+            {
+                if(isNull[i])
+                    cells.push_back(QueryResultStmt::Cell());
+                else
+                    cells.push_back(QueryResultStmt::Cell(std::string(buffers[i].get(), lengths[i])));
+            }
+            rows.push_back(cells);
+        }
+        if(fetchState != MYSQL_NO_DATA)
+        {
+            //unreachable in practice: buffers are sized from the stored
+            //maximum lengths, so MYSQL_DATA_TRUNCATED cannot occur
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: mysql_stmt_fetch() failed\n");
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+            fetchOk = false;
+        }
+
+        if(fetchOk)
+        {
+            result.reset(new QueryResultStmt(rows, types));
+            result->NextRow();
+        }
+    }
+
+    mysql_free_result(pMeta);
+    mysql_stmt_free_result(m_stmt);
+    return result;
 }
 
 enum_field_types MySqlPreparedStatement::ToMySQLType(SqlStmtFieldData const& data, my_bool& bUnsigned)

@@ -29,6 +29,38 @@
 #endif
 #include <mysql.h>
 
+// QueryResult over rows materialized from a MYSQL_STMT fetch. The stmt API
+// exposes no MYSQL_RES row access, so cells are copied into owned storage.
+class QueryResultStmt : public QueryResult
+{
+    public:
+        struct Cell
+        {
+            Cell() : value(), isNull(true) {}
+            explicit Cell(std::string const& v) : value(v), isNull(false) {}
+
+            std::string value;
+            bool isNull;
+        };
+        typedef std::vector<Cell> RowCells;
+        typedef std::vector<RowCells> RowVec;
+
+        // Takes ownership of already-fetched rows; types holds one
+        // Field::DataTypes per column. Like QueryResultMysql, the result is
+        // positioned on the first row by an initial NextRow() call.
+        QueryResultStmt(RowVec rows, std::vector<enum Field::DataTypes> const& types);
+        ~QueryResultStmt() override;
+
+        bool NextRow() override;
+
+    private:
+        void EndQuery();
+
+        RowVec mRows;
+        size_t mRowIndex;
+        Field* mFields;
+};
+
 class QueryResultMysql : public QueryResult
 {
     public:
@@ -38,8 +70,9 @@ class QueryResultMysql : public QueryResult
 
         bool NextRow() override;
 
+        static enum Field::DataTypes ConvertNativeType(enum_field_types mysqlType);
+
     private:
-        enum Field::DataTypes ConvertNativeType(enum_field_types mysqlType) const;
         void EndQuery();
 
         MYSQL_RES* mResult;

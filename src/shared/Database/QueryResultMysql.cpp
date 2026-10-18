@@ -74,7 +74,51 @@ void QueryResultMysql::EndQuery()
     }
 }
 
-enum Field::DataTypes QueryResultMysql::ConvertNativeType(enum_field_types mysqlType) const
+QueryResultStmt::QueryResultStmt(RowVec rows, std::vector<enum Field::DataTypes> const& types) :
+    QueryResult(rows.size(), static_cast<uint32>(types.size())), mRows(std::move(rows)), mRowIndex(size_t(-1)), mFields(nullptr)
+{
+    MANGOS_ASSERT(types.size() == mFieldCount);
+
+    mFields = new Field[mFieldCount];
+    MANGOS_ASSERT(mFields);
+
+    for (uint32 i = 0; i < mFieldCount; ++i)
+        mFields[i].SetType(types[i]);
+}
+
+QueryResultStmt::~QueryResultStmt()
+{
+    EndQuery();
+}
+
+bool QueryResultStmt::NextRow()
+{
+    if (mRowIndex + 1 >= mRows.size())
+    {
+        EndQuery();
+        return false;
+    }
+
+    ++mRowIndex;
+    RowCells const& cells = mRows[mRowIndex];
+    for (uint32 i = 0; i < mFieldCount; ++i)
+        mFields[i].SetValue(cells[i].isNull ? nullptr : cells[i].value.c_str());
+    mCurrentRow = mFields;
+    return true;
+}
+
+void QueryResultStmt::EndQuery()
+{
+    if (mFields)
+    {
+        delete [] mFields;
+        mFields = nullptr;
+    }
+
+    mCurrentRow = nullptr;
+}
+
+enum Field::DataTypes QueryResultMysql::ConvertNativeType(enum_field_types mysqlType)
 {
     switch (mysqlType)
     {

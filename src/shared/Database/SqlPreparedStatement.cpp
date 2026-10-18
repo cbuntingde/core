@@ -85,6 +85,22 @@ bool SqlStatement::Execute()
     return m_pDB->ExecuteStmt(m_index, args);
 }
 
+std::unique_ptr<QueryResult> SqlStatement::PQuery()
+{
+    SqlStmtParameters* args = detach();
+    //verify amount of bound parameters
+    if(args->boundParams() != arguments())
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: wrong amount of parameters (%i instead of %i)", args->boundParams(), arguments());
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: statement: %s", m_pDB->GetStmtString(ID()).c_str());
+        delete args;
+        MANGOS_ASSERT(false);
+        return nullptr;
+    }
+
+    return m_pDB->QueryStmt(m_index, args);
+}
+
 bool SqlStatement::DirectExecute()
 {
     SqlStmtParameters* args = detach();
@@ -141,6 +157,14 @@ void SqlPlainPreparedStatement::bind(SqlStmtParameters const& holder)
             nLastPos += tmp.length();
         }
     }
+}
+
+std::unique_ptr<QueryResult> SqlPlainPreparedStatement::query()
+{
+    if(m_szPlainRequest.empty())
+        return nullptr;
+
+    return m_pConn.Query(m_szPlainRequest);
 }
 
 bool SqlPlainPreparedStatement::execute()
