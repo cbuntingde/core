@@ -36,6 +36,21 @@ TEST(BotObjective_MapWsFlagState)
     ASSERT_TRUE(BotObjective::MapWsFlagState(9u) == BOT_FLAG_GONE);
 }
 
+TEST(BotObjective_NodeAssignmentSpreadsBanners)
+{
+    ASSERT_EQ(BotObjective::NodeFor(0u), 0u);
+    ASSERT_EQ(BotObjective::NodeFor(4u), 4u);
+    ASSERT_EQ(BotObjective::NodeFor(5u), 0u);
+
+    BotObjective objective;
+    ASSERT_FALSE(objective.HasNode());
+    objective.AssignNode(7u);
+    ASSERT_TRUE(objective.HasNode());
+    ASSERT_EQ(objective.node, 2u);
+    objective.Reset();
+    ASSERT_FALSE(objective.HasNode());
+}
+
 TEST(BotObjective_FocusMirrorsRolePriority)
 {
     ASSERT_TRUE(BotObjective::FocusForState(BOT_FLAG_HOME, BOT_FLAG_HOME) == BOT_FOCUS_NONE);

@@ -15,6 +15,7 @@
 */
 
 #include "PartyBotAI.h"
+#include "BotDungeon.h"
 #include "Player.h"
 #include "CreatureAI.h"
 #include "MotionMaster.h"
@@ -180,6 +181,51 @@ bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
     }
 
     return me->GetMotionMaster()->MoveDistance(pEnemy, 15.0f);
+}
+
+bool PartyBotAI::SpreadFromGroupmates()
+{
+    // Ranged roles only: tanks and melee stack on the boss by design.
+    CombatBotRoles const role = GetRole();
+    if (role != ROLE_RANGE_DPS && role != ROLE_HEALER)
+        return false;
+    // Never break a cast or interrupt movement: reposition between actions.
+    if (me->IsMoving() || me->IsNonMeleeSpellCasted(false, false, true))
+        return false;
+    if (!me->IsInCombat() || !me->GetVictim())
+        return false;
+
+    Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return false;
+
+    Player* pNearest = nullptr;
+    float const triggerSq = BotDungeon::SPREAD_TRIGGER_DIST * BotDungeon::SPREAD_TRIGGER_DIST;
+    float nearestSq = triggerSq;
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            if (pMember == me || !pMember->IsAlive())
+                continue;
+            float const dx = me->GetPositionX() - pMember->GetPositionX();
+            float const dy = me->GetPositionY() - pMember->GetPositionY();
+            float const distSq = dx * dx + dy * dy;
+            if (distSq < nearestSq)
+            {
+                nearestSq = distSq;
+                pNearest = pMember;
+            }
+        }
+    }
+
+    if (!pNearest)
+        return false;
+
+    float destX = 0.0f, destY = 0.0f;
+    BotDungeon::SpreadDestination(me->GetPositionX(), me->GetPositionY(), pNearest->GetPositionX(), pNearest->GetPositionY(), BotDungeon::SPREAD_TARGET_DIST, destX, destY);
+    me->GetMotionMaster()->MovePoint(0, destX, destY, me->GetPositionZ(), MOVE_PATHFINDING | MOVE_EXCLUDE_STEEP_SLOPES, 0, me->GetOrientation());
+    return true;
 }
 
 bool PartyBotAI::HasSafeRecoveryWindow() const
@@ -967,6 +1013,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) &&
                 IsValidHostileTarget(pVictim) &&
                 AttackStart(pVictim))
+                return;
+            else if ((GetRole() == ROLE_RANGE_DPS || GetRole() == ROLE_HEALER) && SpreadFromGroupmates())
                 return;
 
             switch (me->GetMotionMaster()->GetCurrentMovementGeneratorType())

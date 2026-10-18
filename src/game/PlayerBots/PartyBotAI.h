@@ -65,6 +65,7 @@ public:
     bool IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy);
     Unit* GetDistancingTarget(Unit* pEnemy);
     bool RunAwayFromTarget(Unit* pEnemy);
+    bool SpreadFromGroupmates();
     bool CrowdControlMarkedTargets();
     bool AcceptsTarget(Unit const* pTarget, BotTargetSource source) const;
     void ReturnToHoldAnchor();

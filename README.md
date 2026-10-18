@@ -22,6 +22,11 @@ what players type in game, and fully tested builds.
 - In Warsong Gulch, bots play positions: some guard the flag room while
   others attack, escort the carrier, chase the thief, or recover a
   dropped flag.
+- In Arathi Basin, bots spread across the banners and fight for their
+  own. In Alterac Valley, some hold threatened points while the rest
+  attack.
+- Dungeon fighters keep their distance from each other instead of
+  piling up, and focus the marked target when there is one.
 - The download includes an optional add-on that adds the clickable
   panel; its own readme explains how to switch it on.
 
@@ -43,7 +48,7 @@ what players type in game, and fully tested builds.
 
 ## Still to come
 
-- Battleground bots that play the objectives instead of wandering.
+- Bots that step out of fire and other battlefield hazards.
 
 ## How to play
 

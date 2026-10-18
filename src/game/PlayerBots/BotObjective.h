@@ -65,10 +65,17 @@ enum BotObjectiveFocus
 
 struct BotObjective
 {
-    BotObjective() : baseRole(BOT_OBJECTIVE_INVALID) {}
+    BotObjective() : baseRole(BOT_OBJECTIVE_INVALID), node(5u) {}
 
     bool HasBaseRole() const { return baseRole != BOT_OBJECTIVE_INVALID; }
-    void Reset() { baseRole = BOT_OBJECTIVE_INVALID; }
+    void Reset() { baseRole = BOT_OBJECTIVE_INVALID; node = 5u; }
+
+    // Sticky Arathi banner from a stable per-bot seed (Arathi always has 5
+    // banners). No roster scan, stable across ticks and deaths: the bot
+    // routes to its node and fights for it.
+    static unsigned NodeFor(unsigned seed) { return seed % 5u; }
+    void AssignNode(unsigned seed) { node = NodeFor(seed); }
+    bool HasNode() const { return node < 5u; }
 
     // Sticky split from a stable per-bot seed (guid low part): 2 in 5
     // defend, the rest assault. Deterministic, so roles survive ticks,
@@ -129,6 +136,7 @@ struct BotObjective
     }
 
     BotObjectiveRole baseRole;
+    unsigned node;
 };
 
 #endif

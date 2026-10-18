@@ -25,6 +25,7 @@
 #include "Battlegrounds/BattleGround.h"
 #include "BattleGroundAV.h"
 #include "BattleGroundWS.h"
+#include "BattleGroundAB.h"
 #include "ObjectAccessor.h"
 #include "Geometry.h"
 #include "Utilities/Random.h"
@@ -2085,8 +2086,12 @@ bool BattleBotAI::StartNewPathToObjective()
         case BATTLEGROUND_AV:
         {
             // Alliance and Horde code is intentionally different.
-            // Horde bots are more united and always go together.
-            // Alliance bots can pick random objective.
+            // Sticky offense/defense split by guid (see BotObjective); each
+            // side falls back to the other list when its own is quiet.
+
+            if (!m_objective.HasBaseRole())
+                m_objective.AssignBase(me->GetGUIDLow());
+            bool const isDefender = m_objective.baseRole == BOT_OBJECTIVE_DEFEND;
 
             if (me->GetTeam() == HORDE)
             {
@@ -2115,23 +2120,45 @@ bool BattleBotAI::StartNewPathToObjective()
                         return StartNewPathToPosition(pBalinda->GetPosition(), vPaths_AV);
                 }
 
-                for (const auto& objective : AV_HordeDefendObjectives)
+                auto const defendHorde = [&]() -> bool
                 {
-                    if (bg->IsActiveEvent(objective.first, ALLIANCE_ASSAULTED))
+                    for (const auto& objective : AV_HordeDefendObjectives)
                     {
-                        if (GameObject* pGO = me->GetMap()->GetGameObject(bg->GetSingleGameObjectGuid(objective.first, objective.second)))
-                            if (me->IsWithinDist(pGO, VISIBILITY_DISTANCE_LARGE))
+                        if (bg->IsActiveEvent(objective.first, ALLIANCE_ASSAULTED))
+                        {
+                            if (GameObject* pGO = me->GetMap()->GetGameObject(bg->GetSingleGameObjectGuid(objective.first, objective.second)))
+                                if (me->IsWithinDist(pGO, VISIBILITY_DISTANCE_LARGE))
+                                    return StartNewPathToPosition(pGO->GetPosition(), vPaths_AV);
+                        }
+                    }
+                    return false;
+                };
+                auto const attackHorde = [&]() -> bool
+                {
+                    for (const auto& objective : AV_HordeAttackObjectives)
+                    {
+                        if (bg->IsActiveEvent(objective.first, ALLIANCE_ASSAULTED) || bg->IsActiveEvent(objective.first, ALLIANCE_CONTROLLED) || bg->IsActiveEvent(objective.first, NEUTRAL_CONTROLLED))
+                        {
+                            if (GameObject* pGO = me->GetMap()->GetGameObject(bg->GetSingleGameObjectGuid(objective.first, objective.second)))
                                 return StartNewPathToPosition(pGO->GetPosition(), vPaths_AV);
+                        }
                     }
-                }
+                    return false;
+                };
 
-                for (const auto& objective : AV_HordeAttackObjectives)
+                if (isDefender)
                 {
-                    if (bg->IsActiveEvent(objective.first, ALLIANCE_ASSAULTED) || bg->IsActiveEvent(objective.first, ALLIANCE_CONTROLLED) || bg->IsActiveEvent(objective.first, NEUTRAL_CONTROLLED))
-                    {
-                        if (GameObject* pGO = me->GetMap()->GetGameObject(bg->GetSingleGameObjectGuid(objective.first, objective.second)))
-                            return StartNewPathToPosition(pGO->GetPosition(), vPaths_AV);
-                    }
+                    if (defendHorde())
+                        return true;
+                    if (attackHorde())
+                        return true;
+                }
+                else
+                {
+                    if (attackHorde())
+                        return true;
+                    if (defendHorde())
+                        return true;
                 }
             }
             else // ALLIANCE
@@ -2155,8 +2182,9 @@ bool BattleBotAI::StartNewPathToObjective()
                             return StartNewPathToPosition(pGO->GetPosition(), vPaths_AV);
                 }
 
-                // Chance to defend.
-                if (roll_chance_u(25))
+                // Defenders hold threatened points first; assaulters fall back
+                // to defense only when no attack objective exists.
+                auto const defendAlliance = [&]() -> bool
                 {
                     for (const auto& objective : AV_AllianceDefendObjectives)
                     {
@@ -2166,7 +2194,11 @@ bool BattleBotAI::StartNewPathToObjective()
                                 return StartNewPathToPosition(pGO->GetPosition(), vPaths_AV);
                         }
                     }
-                }
+                    return false;
+                };
+
+                if (isDefender && defendAlliance())
+                    return true;
 
                 // Attack closest objective.
                 WorldObject* pAttackObjectiveObject = nullptr;
@@ -2199,6 +2231,9 @@ bool BattleBotAI::StartNewPathToObjective()
 
                 if (pAttackObjectiveObject)
                     return StartNewPathToPosition(pAttackObjectiveObject->GetPosition(), vPaths_AV);
+
+                if (!isDefender && defendAlliance())
+                    return true;
             }
             break;
         }
@@ -2274,6 +2309,17 @@ bool BattleBotAI::StartNewPathToObjective()
             }
 
             return StartNewPathToPosition(destination, vPaths_WS);
+        }
+        case BATTLEGROUND_AB:
+        {
+            // Sticky banner, spread by guid: route there and fight for it.
+            // Reuses the recorded network; no new waypoint data.
+            if (!m_objective.HasNode())
+                m_objective.AssignNode(me->GetGUIDLow());
+
+            float const* nodePos = BG_AB_BuffPositions[m_objective.node];
+            Position const destination(nodePos[0], nodePos[1], nodePos[2], nodePos[3]);
+            return StartNewPathToPosition(destination, vPaths_AB);
         }
     }
 
