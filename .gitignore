@@ -37,6 +37,7 @@ cmake-build-*
 #
 /bin/
 /build/
+/build-tests/
 /run/
 /opt/
 tags
@@ -123,3 +124,4 @@ Progression.h
 plan.md
 notes.md
 AGENTS.md
+.agents/
