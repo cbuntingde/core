@@ -2310,6 +2310,7 @@ bool BattleBotAI::StartNewPathToObjective()
 
             return StartNewPathToPosition(destination, vPaths_WS);
         }
+        #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
         case BATTLEGROUND_AB:
         {
             // Sticky banner, spread by guid: route there and fight for it.
@@ -2321,6 +2322,7 @@ bool BattleBotAI::StartNewPathToObjective()
             Position const destination(nodePos[0], nodePos[1], nodePos[2], nodePos[3]);
             return StartNewPathToPosition(destination, vPaths_AB);
         }
+#endif
     }
 
     return false;
