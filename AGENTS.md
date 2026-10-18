@@ -1,5 +1,16 @@
 # AGENTS.md — vMaNGOS core server security notes
 
+## Working agreements
+
+- Keep [README.md](C:\chris-dev\core\README.md) (tracked) and [notes.md](C:\chris-dev\core\notes.md) (local, gitignored) up to date at all times: every behavior change updates the README in the same change, and every plan/idea change updates notes.md. Local planning docs (`plan.md`, `notes.md`) stay gitignored via `.gitignore` and are never committed.
+
+## Local environment (not in the repo)
+
+- [Running server](C:\chris-dev\Release): `mangosd.exe` + `mangosd.conf`, `realmd.exe` + `realmd.conf`, extractor tools, and live logs. Edit the game database or server config here.
+- [Game data](C:\chris-dev\Release\data): extracted `dbc`, `maps`, `mmaps`, `vmaps` (plus `Buildings`, `Cameras`, client build `5875`). Re-extract with the tools in the server folder when client data changes.
+- [Database](C:\chris-dev\Release\mysql5): local MySQL 5 install (`Start MySQL.bat` / `Stop MySQL.bat`); base dumps `mangos.sql`, `characters.sql`, `logon.sql`, `logs.sql` at its root.
+- [WoW client](C:\chris-dev\SoloCraft 1.12.1): 1.12.1 `WoW.exe` + `Data`. `realmlist.wtf` already points at `127.0.0.1`, so it connects to the local server above.
+
 ## Work done this session (branch `escape-to-prepared-stmts`, worktree at `core-worktrees/escape-to-prepared-stmts`)
 
 ### Commit `5d1abd2f0` — Crypto: stop loading OpenSSL legacy provider from CWD
