@@ -119,6 +119,29 @@ public:
     uint32 m_currentPoint = 0;
     BattleBotPath* m_currentPath = nullptr;
     uint8 m_waitingSpot = BB_WSG_WAIT_SPOT_SPAWN;
+    // Data-driven rotations (see BuildBattle*Rotation); movement, flag logic
+    // and dynamic-target support stay inline.
+    BotRotationTable m_rotationBattlePaladinCoreA;
+    BotRotationTable m_rotationBattlePaladinCoreB;
+    BotRotationTable m_rotationBattleShamanCore;
+    BotRotationTable m_rotationBattleHunterCore;
+    BotRotationTable m_rotationBattleMageOpener;
+    BotRotationTable m_rotationBattleMageAoE;
+    BotRotationTable m_rotationBattleMageCore;
+    BotRotationTable m_rotationBattlePriestDPSPre;
+    BotRotationTable m_rotationBattlePriestDPSPost;
+    BotRotationTable m_rotationBattleWarlockCoreA;
+    BotRotationTable m_rotationBattleWarlockCoreB;
+    BotRotationTable m_rotationBattleWarlockCoreC;
+    BotRotationTable m_rotationBattleWarriorCoreA;
+    BotRotationTable m_rotationBattleWarriorCoreB;
+    BotRotationTable m_rotationBattleRogueInterrupt;
+    BotRotationTable m_rotationBattleRogueBuilders;
+    BotRotationTable m_rotationBattleDruidCatFinish;
+    BotRotationTable m_rotationBattleDruidCatBuild;
+    BotRotationTable m_rotationBattleDruidBearCore;
+    BotRotationTable m_rotationBattleDruidBearAoE;
+    BotRotationTable m_rotationBattleDruidCaster;
 };
 
 #endif

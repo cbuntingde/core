@@ -2898,9 +2898,10 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
 
 bool CombatBotBaseAI::RunRotation(Unit* pVictim, BotRotationTable const& rotation)
 {
-    if (!pVictim)
-        return false;
-
+    // pVictim may be null (in combat with no victim yet): VICTIM steps
+    // resolve to null and are skipped, SELF steps still evaluate, and
+    // OTHER_ATTACKER steps resolve against whoever is attacking. SELF-step
+    // conditions must therefore never dereference pVictim.
     for (BotRotationStep const& step : rotation)
     {
         if (!step.spell)
@@ -3036,6 +3037,410 @@ void CombatBotBaseAI::BuildMageRotation(BotRotationTable& opener, BotRotationTab
     core.push_back({ m_spells.mage.pFireBlast, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
     core.push_back({ m_spells.mage.pFireball, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
     core.push_back({ m_spells.mage.pEvocation, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_Evocation });
+}
+
+bool CombatBotBaseAI::PaladinCond_HolyShield(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return !ai->me->GetAttackers().empty();
+}
+
+bool CombatBotBaseAI::PaladinCond_TurnEvil(CombatBotBaseAI const* ai, Unit const*, Unit const* target, SpellEntry const*)
+{
+    return (ai->m_role != ROLE_TANK) && (target->GetCreatureType() == CREATURE_TYPE_UNDEAD);
+}
+
+bool CombatBotBaseAI::PaladinCond_Judgement(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    SpellEntry const* pSeal = ai->m_spells.paladin.pSeal;
+    return pSeal && ai->me->HasAura(pSeal->Id) && (ai->me->GetPowerPercent(POWER_MANA) > 30.0f);
+}
+
+bool CombatBotBaseAI::PaladinCond_HammerOfJustice(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted() ||
+        (ai->me->GetHealthPercent() < 20.0f && !ai->me->GetAttackers().empty());
+}
+
+bool CombatBotBaseAI::PaladinCond_HammerOfWrath(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetHealthPercent() < 20.0f;
+}
+
+bool CombatBotBaseAI::PaladinCond_Consecration(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->GetAttackersInRangeCount(10.0f) > 2;
+}
+
+bool CombatBotBaseAI::PaladinCond_Exorcism(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsCreature() && (victim->GetCreatureType() == CREATURE_TYPE_UNDEAD);
+}
+
+bool CombatBotBaseAI::PaladinCond_HolyWrath(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsCreature() &&
+        (victim->GetCreatureType() == CREATURE_TYPE_UNDEAD ||
+         victim->GetCreatureType() == CREATURE_TYPE_DEMON) &&
+        (ai->me->GetAttackers().size() < 3);
+}
+
+void CombatBotBaseAI::BuildPaladinRotation(BotRotationTable& pre, BotRotationTable& coreA, BotRotationTable& coreB)
+{
+    pre.clear();
+    pre.push_back({ m_spells.paladin.pHolyShield, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::PaladinCond_HolyShield });
+    pre.push_back({ m_spells.paladin.pTurnEvil, BOT_TARGET_OTHER_ATTACKER, BOT_TARGET_OTHER_ATTACKER, &CombatBotBaseAI::PaladinCond_TurnEvil });
+
+    coreA.clear();
+    coreA.push_back({ m_spells.paladin.pJudgement, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PaladinCond_Judgement });
+    coreA.push_back({ m_spells.paladin.pHammerOfJustice, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PaladinCond_HammerOfJustice });
+    coreA.push_back({ m_spells.paladin.pHammerOfWrath, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PaladinCond_HammerOfWrath });
+    coreA.push_back({ m_spells.paladin.pConsecration, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::PaladinCond_Consecration });
+
+    coreB.clear();
+    coreB.push_back({ m_spells.paladin.pExorcism, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PaladinCond_Exorcism });
+    coreB.push_back({ m_spells.paladin.pHolyWrath, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PaladinCond_HolyWrath });
+}
+
+bool CombatBotBaseAI::ShamanCond_ElementalMastery(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetAttackers().empty();
+}
+
+bool CombatBotBaseAI::ShamanCond_EarthShock(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted(false, false, true);
+}
+
+bool CombatBotBaseAI::ShamanCond_FrostShock(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsMoving();
+}
+
+bool CombatBotBaseAI::ShamanCond_Purge(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const* spell)
+{
+    return ai->IsValidDispelTarget(victim, spell);
+}
+
+bool CombatBotBaseAI::ShamanCond_LightningBolt(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return (ai->GetRole() == ROLE_RANGE_DPS) || !ai->me->CanReachWithMeleeAutoAttack(victim);
+}
+
+void CombatBotBaseAI::BuildShamanRotation(BotRotationTable& core)
+{
+    core.clear();
+    core.push_back({ m_spells.shaman.pElementalMastery, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::ShamanCond_ElementalMastery });
+    core.push_back({ m_spells.shaman.pEarthShock, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::ShamanCond_EarthShock });
+    core.push_back({ m_spells.shaman.pFrostShock, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::ShamanCond_FrostShock });
+    core.push_back({ m_spells.shaman.pStormstrike, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.shaman.pChainLightning, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.shaman.pPurge, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::ShamanCond_Purge });
+    core.push_back({ m_spells.shaman.pFlameShock, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.shaman.pLightningBolt, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::ShamanCond_LightningBolt });
+}
+
+bool CombatBotBaseAI::HunterCond_ConcussiveShot(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsMoving() && (victim->GetVictim() == ai->me);
+}
+
+void CombatBotBaseAI::BuildHunterRotation(BotRotationTable& core)
+{
+    core.clear();
+    core.push_back({ m_spells.hunter.pConcussiveShot, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::HunterCond_ConcussiveShot });
+    core.push_back({ m_spells.hunter.pAimedShot, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.hunter.pArcaneShot, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.hunter.pSerpentSting, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.hunter.pMultiShot, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+}
+
+bool CombatBotBaseAI::PriestCond_Silence(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted();
+}
+
+bool CombatBotBaseAI::PriestCond_PsychicScream(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->GetAttackersInRangeCount(10.0f) != 0;
+}
+
+bool CombatBotBaseAI::PriestCond_ManaBurn(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetPowerType() == POWER_MANA;
+}
+
+bool CombatBotBaseAI::PriestCond_MindFlay(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return !ai->GetAttackersInRangeCount(10.0f) || ai->me->HasAuraType(SPELL_AURA_SCHOOL_ABSORB);
+}
+
+bool CombatBotBaseAI::PriestCond_HolyNova(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->GetAttackersInRangeCount(10.0f) > 2;
+}
+
+void CombatBotBaseAI::BuildPriestRotation(BotRotationTable& dpsPre, BotRotationTable& dpsPost)
+{
+    dpsPre.clear();
+    dpsPre.push_back({ m_spells.priest.pShadowform, BOT_TARGET_SELF, BOT_TARGET_SELF, nullptr });
+    dpsPre.push_back({ m_spells.priest.pSilence, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PriestCond_Silence });
+    dpsPre.push_back({ m_spells.priest.pVampiricEmbrace, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    dpsPre.push_back({ m_spells.priest.pMindBlast, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    dpsPre.push_back({ m_spells.priest.pShadowWordPain, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    dpsPre.push_back({ m_spells.priest.pDevouringPlague, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    dpsPre.push_back({ m_spells.priest.pPsychicScream, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::PriestCond_PsychicScream });
+    dpsPre.push_back({ m_spells.priest.pManaBurn, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PriestCond_ManaBurn });
+    dpsPre.push_back({ m_spells.priest.pMindFlay, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PriestCond_MindFlay });
+
+    dpsPost.clear();
+    dpsPost.push_back({ m_spells.priest.pHolyNova, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::PriestCond_HolyNova });
+    dpsPost.push_back({ m_spells.priest.pSmite, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+}
+
+bool CombatBotBaseAI::WarlockCond_DeathCoil(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->CanReachWithMeleeAutoAttack(ai->me) || victim->IsNonMeleeSpellCasted();
+}
+
+bool CombatBotBaseAI::WarlockCond_Shadowburn(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetHealthPercent() < 10.0f;
+}
+
+bool CombatBotBaseAI::WarlockCond_SearingPain(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetHealthPercent() < 20.0f;
+}
+
+bool CombatBotBaseAI::WarlockCond_SiphonLife(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetHealthPercent() < 80.0f;
+}
+
+bool CombatBotBaseAI::WarlockCond_DrainLife(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetHealthPercent() < 30.0f;
+}
+
+bool CombatBotBaseAI::WarlockCond_Fear(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetVictim() == ai->me;
+}
+
+bool CombatBotBaseAI::WarlockCond_HowlOfTerror(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->GetAttackersInRangeCount(10.0f) > 1;
+}
+
+bool CombatBotBaseAI::WarlockCond_LifeTap(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetPowerPercent(POWER_MANA) < 10.0f) && (ai->me->GetHealthPercent() > 70.0f);
+}
+
+void CombatBotBaseAI::BuildWarlockRotation(BotRotationTable& coreA, BotRotationTable& coreB, BotRotationTable& coreC)
+{
+    coreA.clear();
+    coreA.push_back({ m_spells.warlock.pDeathCoil, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_DeathCoil });
+    coreA.push_back({ m_spells.warlock.pShadowburn, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_Shadowburn });
+    coreA.push_back({ m_spells.warlock.pSearingPain, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_SearingPain });
+
+    coreB.clear();
+    coreB.push_back({ m_spells.warlock.pImmolate, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warlock.pConflagrate, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warlock.pCorruption, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warlock.pSiphonLife, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_SiphonLife });
+    coreB.push_back({ m_spells.warlock.pDrainLife, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_DrainLife });
+    coreB.push_back({ m_spells.warlock.pFear, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_Fear });
+    coreB.push_back({ m_spells.warlock.pCurseofAgony, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+
+    coreC.clear();
+    coreC.push_back({ m_spells.warlock.pHowlofTerror, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarlockCond_HowlOfTerror });
+    coreC.push_back({ m_spells.warlock.pShadowBolt, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreC.push_back({ m_spells.warlock.pLifeTap, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarlockCond_LifeTap });
+}
+
+bool CombatBotBaseAI::WarriorCond_Pummel(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted(false, false, true);
+}
+
+bool CombatBotBaseAI::WarriorCond_ShieldBash(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted(false, false, true) && ai->IsWearingShield(ai->me);
+}
+
+bool CombatBotBaseAI::WarriorCond_Execute(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetHealthPercent() < 20.0f;
+}
+
+bool CombatBotBaseAI::WarriorCond_LastStand(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetHealthPercent() < 20.0f;
+}
+
+bool CombatBotBaseAI::WarriorCond_ConcussionBlow(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted() || victim->IsMoving() || (ai->me->GetHealthPercent() < 50.0f);
+}
+
+bool CombatBotBaseAI::WarriorCond_ShieldBlock(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetShapeshiftForm() == FORM_DEFENSIVESTANCE) &&
+        ai->IsWearingShield(ai->me) && !ai->me->GetAttackers().empty();
+}
+
+bool CombatBotBaseAI::WarriorCond_ShieldWall(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetShapeshiftForm() == FORM_DEFENSIVESTANCE) &&
+        ai->IsWearingShield(ai->me) && !ai->me->GetAttackers().empty() &&
+        (ai->me->GetHealthPercent() < 40.0f);
+}
+
+bool CombatBotBaseAI::WarriorCond_ShieldSlam(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetShapeshiftForm() == FORM_DEFENSIVESTANCE) && ai->IsWearingShield(ai->me);
+}
+
+bool CombatBotBaseAI::WarriorCond_TankSpell(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->m_role == ROLE_TANK;
+}
+
+bool CombatBotBaseAI::WarriorCond_Hamstring(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsMoving() && !victim->HasUnitState(UNIT_STATE_ROOT) &&
+        !victim->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED);
+}
+
+bool CombatBotBaseAI::WarriorCond_IntimidatingShout(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetHealthPercent() < 30.0f) && (ai->GetAttackersInRangeCount(10.0f) > 2);
+}
+
+bool CombatBotBaseAI::WarriorCond_Retaliation(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->GetAttackersInRangeCount(10.0f) > 2;
+}
+
+bool CombatBotBaseAI::WarriorCond_SweepingStrikes(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetEnemyCountInRadiusAround(victim, 10.0f) > 2;
+}
+
+bool CombatBotBaseAI::WarriorCond_Recklessness(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return (ai->m_role != ROLE_TANK) &&
+        (ai->me->GetHealthPercent() > 60.0f) && (victim->GetHealthPercent() > 40.0f) &&
+        !ai->me->HasUnitState(UNIT_STATE_ROOT) && !ai->me->IsImmuneToMechanic(MECHANIC_FEAR);
+}
+
+bool CombatBotBaseAI::WarriorCond_Disarm(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return IsMeleeWeaponClass(victim->GetClass());
+}
+
+void CombatBotBaseAI::BuildWarriorRotation(BotRotationTable& coreA, BotRotationTable& coreB)
+{
+    coreA.clear();
+    coreA.push_back({ m_spells.warrior.pPummel, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Pummel });
+    coreA.push_back({ m_spells.warrior.pShieldBash, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_ShieldBash });
+    coreA.push_back({ m_spells.warrior.pExecute, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Execute });
+    coreA.push_back({ m_spells.warrior.pOverpower, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreA.push_back({ m_spells.warrior.pLastStand, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_LastStand });
+    coreA.push_back({ m_spells.warrior.pConcussionBlow, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_ConcussionBlow });
+    coreA.push_back({ m_spells.warrior.pShieldBlock, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_ShieldBlock });
+    coreA.push_back({ m_spells.warrior.pShieldWall, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_ShieldWall });
+    coreA.push_back({ m_spells.warrior.pShieldSlam, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_ShieldSlam });
+    coreA.push_back({ m_spells.warrior.pThunderClap, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_TankSpell });
+    coreA.push_back({ m_spells.warrior.pSunderArmor, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_TankSpell });
+    coreA.push_back({ m_spells.warrior.pHamstring, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Hamstring });
+    coreA.push_back({ m_spells.warrior.pRend, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreA.push_back({ m_spells.warrior.pIntimidatingShout, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_IntimidatingShout });
+    coreA.push_back({ m_spells.warrior.pRetaliation, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_Retaliation });
+    coreA.push_back({ m_spells.warrior.pSweepingStrikes, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_SweepingStrikes });
+    coreA.push_back({ m_spells.warrior.pRecklessness, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_Recklessness });
+    coreA.push_back({ m_spells.warrior.pDeathWish, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_Recklessness });
+    coreA.push_back({ m_spells.warrior.pMortalStrike, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreA.push_back({ m_spells.warrior.pBloodthirst, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+
+    coreB.clear();
+    coreB.push_back({ m_spells.warrior.pIntercept, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warrior.pWhirlwind, BOT_TARGET_SELF, BOT_TARGET_SELF, nullptr });
+    coreB.push_back({ m_spells.warrior.pDisarm, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Disarm });
+    coreB.push_back({ m_spells.warrior.pDemoralizingShout, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_TankSpell });
+}
+
+bool CombatBotBaseAI::RogueCond_Interrupt(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted();
+}
+
+void CombatBotBaseAI::BuildRogueRotation(BotRotationTable& interrupt, BotRotationTable& builders)
+{
+    interrupt.clear();
+    interrupt.push_back({ m_spells.rogue.pGouge, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::RogueCond_Interrupt });
+    interrupt.push_back({ m_spells.rogue.pKick, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::RogueCond_Interrupt });
+
+    builders.clear();
+    builders.push_back({ m_spells.rogue.pBackstab, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    builders.push_back({ m_spells.rogue.pGhostlyStrike, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    builders.push_back({ m_spells.rogue.pHemorrhage, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    builders.push_back({ m_spells.rogue.pSinisterStrike, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+}
+
+bool CombatBotBaseAI::DruidCond_ComboPoints(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetComboPoints() > 4;
+}
+
+bool CombatBotBaseAI::DruidCond_FrenziedRegeneration(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetHealthPercent() < 30.0f;
+}
+
+bool CombatBotBaseAI::DruidCond_BearAoE(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetPower(POWER_RAGE) > 800) || (ai->GetAttackersInRangeCount(10.0f) > 1);
+}
+
+bool CombatBotBaseAI::DruidCond_Hurricane(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetEnemyCountInRadiusAround(victim, 10.0f) > 2;
+}
+
+bool CombatBotBaseAI::DruidCond_Starfire(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetHealthPercent() > 50.0f;
+}
+
+void CombatBotBaseAI::BuildDruidRotation(BotRotationTable& catFinish, BotRotationTable& catBuild,
+    BotRotationTable& bearCore, BotRotationTable& bearAoE, BotRotationTable& caster)
+{
+    catFinish.clear();
+    catFinish.push_back({ m_spells.druid.pFerociousBite, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_ComboPoints });
+    catFinish.push_back({ m_spells.druid.pRip, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_ComboPoints });
+
+    catBuild.clear();
+    catBuild.push_back({ m_spells.druid.pShred, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    catBuild.push_back({ m_spells.druid.pRake, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    catBuild.push_back({ m_spells.druid.pClaw, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+
+    bearCore.clear();
+    bearCore.push_back({ m_spells.druid.pFeralCharge, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    bearCore.push_back({ m_spells.druid.pBash, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    bearCore.push_back({ m_spells.druid.pFrenziedRegeneration, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::DruidCond_FrenziedRegeneration });
+    bearCore.push_back({ m_spells.druid.pFaerieFireFeral, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+
+    bearAoE.clear();
+    bearAoE.push_back({ m_spells.druid.pDemoralizingRoar, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_BearAoE });
+    bearAoE.push_back({ m_spells.druid.pSwipe, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_BearAoE });
+
+    caster.clear();
+    caster.push_back({ m_spells.druid.pHurricane, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_Hurricane });
+    caster.push_back({ m_spells.druid.pMoonfire, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    caster.push_back({ m_spells.druid.pStarfire, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_Starfire });
+    caster.push_back({ m_spells.druid.pWrath, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
 }
 
 void CombatBotBaseAI::AddItemToInventory(uint32 itemId, uint32 count)
@@ -3569,4 +3974,238 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             return;
         }
     }
+}
+bool CombatBotBaseAI::BattlePaladinCond_Judgement(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    SpellEntry const* pSeal = ai->m_spells.paladin.pSeal;
+    return pSeal && ai->me->HasAura(pSeal->Id);
+}
+
+bool CombatBotBaseAI::BattlePaladinCond_HammerOfJustice(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted();
+}
+
+bool CombatBotBaseAI::BattlePaladinCond_HolyShield(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return IsMeleeDamageClass(victim->GetClass()) || (ai->GetAttackersInRangeCount(8.0f) > 1);
+}
+
+void CombatBotBaseAI::BuildBattlePaladinRotation(BotRotationTable& coreA, BotRotationTable& coreB)
+{
+    coreA.clear();
+    coreA.push_back({ m_spells.paladin.pJudgement, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattlePaladinCond_Judgement });
+    coreA.push_back({ m_spells.paladin.pHammerOfJustice, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattlePaladinCond_HammerOfJustice });
+    coreA.push_back({ m_spells.paladin.pHammerOfWrath, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PaladinCond_HammerOfWrath });
+    coreA.push_back({ m_spells.paladin.pHolyShield, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattlePaladinCond_HolyShield });
+    coreA.push_back({ m_spells.paladin.pConsecration, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::PaladinCond_Consecration });
+
+    coreB.clear();
+    coreB.push_back({ m_spells.paladin.pExorcism, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::PaladinCond_Exorcism });
+}
+
+bool CombatBotBaseAI::BattleShamanCond_LightningBolt(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return !ai->me->CanReachWithMeleeAutoAttack(victim);
+}
+
+void CombatBotBaseAI::BuildBattleShamanRotation(BotRotationTable& core)
+{
+    core.clear();
+    core.push_back({ m_spells.shaman.pElementalMastery, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::ShamanCond_ElementalMastery });
+    core.push_back({ m_spells.shaman.pEarthShock, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::ShamanCond_EarthShock });
+    core.push_back({ m_spells.shaman.pFrostShock, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::ShamanCond_FrostShock });
+    core.push_back({ m_spells.shaman.pStormstrike, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.shaman.pChainLightning, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.shaman.pPurge, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::ShamanCond_Purge });
+    core.push_back({ m_spells.shaman.pFlameShock, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.shaman.pLightningBolt, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleShamanCond_LightningBolt });
+}
+
+bool CombatBotBaseAI::BattleMageCond_Pyroblast(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    SpellEntry const* pPresenceOfMind = ai->m_spells.mage.pPresenceOfMind;
+    return pPresenceOfMind && ai->me->HasAura(pPresenceOfMind->Id);
+}
+
+bool CombatBotBaseAI::BattleMageCond_ManaShield(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return IsPhysicalDamageClass(victim->GetClass()) && (ai->me->GetPowerPercent(POWER_MANA) > 20.0f);
+}
+
+bool CombatBotBaseAI::BattleMageCond_AoE(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->GetAttackersInRangeCount(10.0f) > 1;
+}
+
+void CombatBotBaseAI::BuildBattleMageRotation(BotRotationTable& opener, BotRotationTable& aoe, BotRotationTable& core)
+{
+    opener.clear();
+    opener.push_back({ m_spells.mage.pCombustion, BOT_TARGET_SELF, BOT_TARGET_SELF, nullptr });
+    opener.push_back({ m_spells.mage.pPyroblast, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleMageCond_Pyroblast });
+    opener.push_back({ m_spells.mage.pIceBlock, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_IceBlock });
+    opener.push_back({ m_spells.mage.pManaShield, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleMageCond_ManaShield });
+    opener.push_back({ m_spells.mage.pCounterspell, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::MageCond_Counterspell });
+
+    aoe.clear();
+    aoe.push_back({ m_spells.mage.pBlastWave, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleMageCond_AoE });
+    aoe.push_back({ m_spells.mage.pArcaneExplosion, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleMageCond_AoE });
+
+    core.clear();
+    core.push_back({ m_spells.mage.pPolymorph, BOT_TARGET_OTHER_ATTACKER, BOT_TARGET_OTHER_ATTACKER, &CombatBotBaseAI::MageCond_Polymorph });
+    core.push_back({ m_spells.mage.pArcanePower, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_ArcanePower });
+    core.push_back({ m_spells.mage.pPresenceOfMind, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_PresenceOfMind });
+    core.push_back({ m_spells.mage.pScorch, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::MageCond_Scorch });
+    core.push_back({ m_spells.mage.pFrostbolt, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.mage.pFireBlast, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.mage.pFireball, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.mage.pEvocation, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_Evocation });
+}
+bool CombatBotBaseAI::BattleWarlockCond_ShadowWard(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetClass() == CLASS_WARLOCK;
+}
+
+bool CombatBotBaseAI::BattleWarlockCond_CurseOfTongues(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsCaster();
+}
+
+bool CombatBotBaseAI::BattleWarlockCond_CurseOfExhaustion(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return !victim->IsCaster();
+}
+
+void CombatBotBaseAI::BuildBattleWarlockRotation(BotRotationTable& coreA, BotRotationTable& coreB, BotRotationTable& coreC)
+{
+    coreA.clear();
+    coreA.push_back({ m_spells.warlock.pDeathCoil, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_DeathCoil });
+    coreA.push_back({ m_spells.warlock.pShadowburn, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_Shadowburn });
+    coreA.push_back({ m_spells.warlock.pSearingPain, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_SearingPain });
+    coreA.push_back({ m_spells.warlock.pShadowWard, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarlockCond_ShadowWard });
+
+    coreB.clear();
+    coreB.push_back({ m_spells.warlock.pImmolate, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warlock.pConflagrate, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warlock.pCorruption, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warlock.pSiphonLife, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_SiphonLife });
+    coreB.push_back({ m_spells.warlock.pDrainLife, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarlockCond_DrainLife });
+    coreB.push_back({ m_spells.warlock.pFear, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warlock.pCurseofTongues, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleWarlockCond_CurseOfTongues });
+    coreB.push_back({ m_spells.warlock.pCurseofExhaustion, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleWarlockCond_CurseOfExhaustion });
+
+    coreC.clear();
+    coreC.push_back({ m_spells.warlock.pHowlofTerror, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarlockCond_HowlOfTerror });
+    coreC.push_back({ m_spells.warlock.pShadowBolt, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreC.push_back({ m_spells.warlock.pLifeTap, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarlockCond_LifeTap });
+}
+
+bool CombatBotBaseAI::BattleWarriorCond_ShieldBlock(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetShapeshiftForm() == FORM_DEFENSIVESTANCE) &&
+        ai->IsWearingShield(ai->me) && !ai->me->GetAttackers().empty() &&
+        IsPhysicalDamageClass(victim->GetClass());
+}
+
+bool CombatBotBaseAI::BattleWarriorCond_ShieldWall(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetShapeshiftForm() == FORM_DEFENSIVESTANCE) &&
+        ai->IsWearingShield(ai->me) && !ai->me->GetAttackers().empty() &&
+        IsPhysicalDamageClass(victim->GetClass()) && (ai->me->GetHealthPercent() < 40.0f);
+}
+
+bool CombatBotBaseAI::BattleWarriorCond_PiercingHowl(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsMoving() && !victim->HasUnitState(UNIT_STATE_ROOT) &&
+        !victim->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED) &&
+        (ai->me->GetCombatDistance(victim) <= 10.0f);
+}
+
+bool CombatBotBaseAI::BattleWarriorCond_Rend(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetClass() == CLASS_ROGUE;
+}
+
+bool CombatBotBaseAI::BattleWarriorCond_IntimidatingShout(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetHealthPercent() < 50.0f) && (ai->GetAttackersInRangeCount(10.0f) > 2);
+}
+
+bool CombatBotBaseAI::BattleWarriorCond_Retaliation(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return IsMeleeDamageClass(victim->GetClass()) && (ai->me->GetHealthPercent() > 70.0f) &&
+        ((ai->GetAttackersInRangeCount(10.0f) > 1) || (victim->GetClass() == CLASS_ROGUE));
+}
+
+bool CombatBotBaseAI::BattleWarriorCond_Recklessness(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetHealthPercent() > 60.0f) && (victim->GetHealthPercent() > 40.0f) &&
+        (victim->GetClass() == CLASS_WARLOCK || victim->GetClass() == CLASS_PRIEST) &&
+        !ai->me->HasUnitState(UNIT_STATE_ROOT) && !ai->me->IsImmuneToMechanic(MECHANIC_FEAR);
+}
+
+void CombatBotBaseAI::BuildBattleWarriorRotation(BotRotationTable& coreA, BotRotationTable& coreB)
+{
+    coreA.clear();
+    coreA.push_back({ m_spells.warrior.pPummel, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Pummel });
+    coreA.push_back({ m_spells.warrior.pShieldBash, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_ShieldBash });
+    coreA.push_back({ m_spells.warrior.pExecute, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Execute });
+    coreA.push_back({ m_spells.warrior.pOverpower, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreA.push_back({ m_spells.warrior.pLastStand, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_LastStand });
+    coreA.push_back({ m_spells.warrior.pConcussionBlow, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_ConcussionBlow });
+    coreA.push_back({ m_spells.warrior.pShieldBlock, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarriorCond_ShieldBlock });
+    coreA.push_back({ m_spells.warrior.pShieldWall, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarriorCond_ShieldWall });
+    coreA.push_back({ m_spells.warrior.pShieldSlam, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::WarriorCond_ShieldSlam });
+    coreA.push_back({ m_spells.warrior.pHamstring, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Hamstring });
+    coreA.push_back({ m_spells.warrior.pPiercingHowl, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleWarriorCond_PiercingHowl });
+    coreA.push_back({ m_spells.warrior.pRend, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleWarriorCond_Rend });
+    coreA.push_back({ m_spells.warrior.pIntimidatingShout, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleWarriorCond_IntimidatingShout });
+    coreA.push_back({ m_spells.warrior.pRetaliation, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarriorCond_Retaliation });
+    coreA.push_back({ m_spells.warrior.pRecklessness, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarriorCond_Recklessness });
+    coreA.push_back({ m_spells.warrior.pDeathWish, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarriorCond_Recklessness });
+    coreA.push_back({ m_spells.warrior.pBerserkerRage, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::BattleWarriorCond_Recklessness });
+    coreA.push_back({ m_spells.warrior.pMortalStrike, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreA.push_back({ m_spells.warrior.pBloodthirst, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+
+    coreB.clear();
+    coreB.push_back({ m_spells.warrior.pIntercept, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warrior.pWhirlwind, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    coreB.push_back({ m_spells.warrior.pDisarm, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::WarriorCond_Disarm });
+}
+bool CombatBotBaseAI::BattleDruidCond_DemoralizingRoar(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return IsMeleeDamageClass(victim->GetClass());
+}
+
+bool CombatBotBaseAI::BattleDruidCond_Swipe(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetPower(POWER_RAGE) > 50) || (ai->GetAttackersInRangeCount(10.0f) > 1);
+}
+
+void CombatBotBaseAI::BuildBattleDruidRotation(BotRotationTable& catFinish, BotRotationTable& catBuild,
+    BotRotationTable& bearCore, BotRotationTable& bearAoE, BotRotationTable& caster)
+{
+    catFinish.clear();
+    catFinish.push_back({ m_spells.druid.pFerociousBite, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_ComboPoints });
+    catFinish.push_back({ m_spells.druid.pRip, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_ComboPoints });
+
+    catBuild.clear();
+    catBuild.push_back({ m_spells.druid.pShred, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    catBuild.push_back({ m_spells.druid.pRake, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    catBuild.push_back({ m_spells.druid.pClaw, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+
+    bearCore.clear();
+    bearCore.push_back({ m_spells.druid.pFeralCharge, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    bearCore.push_back({ m_spells.druid.pBash, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    bearCore.push_back({ m_spells.druid.pFrenziedRegeneration, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::DruidCond_FrenziedRegeneration });
+    bearCore.push_back({ m_spells.druid.pFaerieFireFeral, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+
+    bearAoE.clear();
+    bearAoE.push_back({ m_spells.druid.pDemoralizingRoar, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleDruidCond_DemoralizingRoar });
+    bearAoE.push_back({ m_spells.druid.pSwipe, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::BattleDruidCond_Swipe });
+
+    caster.clear();
+    caster.push_back({ m_spells.druid.pMoonfire, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    caster.push_back({ m_spells.druid.pStarfire, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::DruidCond_Starfire });
+    caster.push_back({ m_spells.druid.pWrath, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
 }

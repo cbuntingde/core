@@ -145,6 +145,142 @@ public:
     static bool MageCond_PresenceOfMind(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
     static bool MageCond_Scorch(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
     static bool MageCond_Evocation(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    // Paladin (Party) rotation tables: pre covers the attacker-gated
+    // defensives after friend-protect; coreA/coreB bracket the inline
+    // DivineFavor+HolyShock pair so the original cast order is preserved.
+    // DivineShield (lone leading block), friend-protect (dynamic target),
+    // the healer branch, Seal upkeep, movement and Freedom stay inline.
+    void BuildPaladinRotation(BotRotationTable& pre, BotRotationTable& coreA, BotRotationTable& coreB);
+    static bool PaladinCond_HolyShield(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool PaladinCond_TurnEvil(CombatBotBaseAI const* ai, Unit const*, Unit const* target, SpellEntry const*);
+    static bool PaladinCond_Judgement(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool PaladinCond_HammerOfJustice(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool PaladinCond_HammerOfWrath(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool PaladinCond_Consecration(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool PaladinCond_Exorcism(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool PaladinCond_HolyWrath(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    // Shaman (Party) rotation: ManaTide (lone, role-independent) stays
+    // inline; the table covers the non-healer DPS chain. Totems and the
+    // healer branch stay inline.
+    void BuildShamanRotation(BotRotationTable& core);
+    static bool ShamanCond_ElementalMastery(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool ShamanCond_EarthShock(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool ShamanCond_FrostShock(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool ShamanCond_Purge(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const* spell);
+    static bool ShamanCond_LightningBolt(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    // Hunter (Party) rotation: Volley (lone AoE), Auto Shot (ammo handling),
+    // the first-attacker defensive block, melee strikes and movement stay
+    // inline; the table covers the ranged shot chain.
+    void BuildHunterRotation(BotRotationTable& core);
+    static bool HunterCond_ConcussiveShot(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    // Priest (Party) rotation: self-shield, Fade/Shackle (first attacker),
+    // InnerFocus (non-blocking) and the healer branch (dynamic targets) stay
+    // inline; dpsPre/dpsPost bracket inline chasing and the wand fallback.
+    void BuildPriestRotation(BotRotationTable& dpsPre, BotRotationTable& dpsPost);
+    static bool PriestCond_Silence(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool PriestCond_PsychicScream(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool PriestCond_ManaBurn(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool PriestCond_MindFlay(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool PriestCond_HolyNova(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    // Warlock (Party) rotation: Banish (first attacker), Rain of Fire (lone
+    // AoE), Demonic Sacrifice (pet target), chasing and the wand fallback
+    // stay inline; coreA/coreB/coreC preserve the original cast order.
+    void BuildWarlockRotation(BotRotationTable& coreA, BotRotationTable& coreB, BotRotationTable& coreC);
+    static bool WarlockCond_DeathCoil(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarlockCond_Shadowburn(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarlockCond_SearingPain(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarlockCond_SiphonLife(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarlockCond_DrainLife(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarlockCond_Fear(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarlockCond_HowlOfTerror(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarlockCond_LifeTap(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    // Warrior (Party) rotation: stance dance (non-blocking), chasing, the
+    // rage-gated Cleave/Heroic Strike pair and the no-victim Battle Shout
+    // stay inline; coreA/coreB preserve the original cast order.
+    void BuildWarriorRotation(BotRotationTable& coreA, BotRotationTable& coreB);
+    static bool WarriorCond_Pummel(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarriorCond_ShieldBash(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarriorCond_Execute(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarriorCond_LastStand(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarriorCond_ConcussionBlow(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarriorCond_ShieldBlock(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarriorCond_ShieldWall(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarriorCond_ShieldSlam(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarriorCond_TankSpell(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarriorCond_Hamstring(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarriorCond_IntimidatingShout(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarriorCond_Retaliation(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool WarriorCond_SweepingStrikes(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarriorCond_Recklessness(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool WarriorCond_Disarm(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    // Rogue (Party) rotation: stealth opener (form-gated branches), Vanish
+    // (movement side effect), random combo finishers, Blind (re-target side
+    // effects), Adrenaline/ColdBlood/Sprint singles and Evasion/Blade Flurry
+    // stay inline; the tables cover interrupts and combo builders.
+    void BuildRogueRotation(BotRotationTable& interrupt, BotRotationTable& builders);
+    static bool RogueCond_Interrupt(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    // Druid (Party) rotation: Barkskin, Hibernate, heals, Innervate, form
+    // changes, stealth opener, Cower, range closers, Maul, Faerie Fire,
+    // Insect Swarm, root-breaks and all movement stay inline; the tables
+    // cover the per-form damage chains.
+    void BuildDruidRotation(BotRotationTable& catFinish, BotRotationTable& catBuild,
+        BotRotationTable& bearCore, BotRotationTable& bearAoE, BotRotationTable& caster);
+    static bool DruidCond_ComboPoints(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool DruidCond_FrenziedRegeneration(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool DruidCond_BearAoE(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool DruidCond_Hurricane(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool DruidCond_Starfire(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    // Battle (BG) rotations. BG bots use different gates (flag awareness, no
+    // group-heal role split) and different orders than Party bots, so each
+    // Battle table is derived from BattleBotAI's own logic, reusing Party
+    // conditions only where the gate is identical.
+    void BuildBattlePaladinRotation(BotRotationTable& coreA, BotRotationTable& coreB);
+    static bool BattlePaladinCond_Judgement(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool BattlePaladinCond_HammerOfJustice(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattlePaladinCond_HolyShield(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    void BuildBattleShamanRotation(BotRotationTable& core);
+    static bool BattleShamanCond_LightningBolt(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    // Battle Mage: same engine as Party mage except the opener (Presence of
+    // Mind aura only), Mana Shield (physical attackers only), the AoE gate
+    // (attackers, not nearby enemies), no Blizzard, plus a self-dispel.
+    // Polymorph intentionally targets the add (OTHER_ATTACKER): the old
+    // inline code selected an add then cast on the victim, dropping the
+    // target; the table casts on the selected add.
+    void BuildBattleMageRotation(BotRotationTable& opener, BotRotationTable& aoe, BotRotationTable& core);
+    static bool BattleMageCond_Pyroblast(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool BattleMageCond_ManaShield(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleMageCond_AoE(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    // Battle Priest reuses BuildPriestRotation for its identical DPS chain;
+    // only its support prelude (heals/dispels for all, no Fade/Shackle) stays
+    // inline and differs.
+    // Battle Warlock: Shadow Ward over Banish/Rain of Fire, unconditional
+    // Fear, caster-split curses over Curse of Agony; pet sacrifice, chasing
+    // and wand stay inline.
+    void BuildBattleWarlockRotation(BotRotationTable& coreA, BotRotationTable& coreB, BotRotationTable& coreC);
+    static bool BattleWarlockCond_ShadowWard(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleWarlockCond_CurseOfTongues(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleWarlockCond_CurseOfExhaustion(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    // Battle Warrior: physical-gated shield wall, snare pair, rogue-only
+    // Rend, caster-hunting cooldowns with Berserker Rage, victim-targeted
+    // Whirlwind and a lone low-rage Heroic Strike; stance dance, chasing and
+    // the no-victim Battle Shout stay inline.
+    void BuildBattleWarriorRotation(BotRotationTable& coreA, BotRotationTable& coreB);
+    static bool BattleWarriorCond_ShieldBlock(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleWarriorCond_ShieldWall(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleWarriorCond_PiercingHowl(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleWarriorCond_Rend(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleWarriorCond_IntimidatingShout(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool BattleWarriorCond_Retaliation(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleWarriorCond_Recklessness(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    // Battle Rogue reuses BuildRogueRotation (identical interrupt/builder
+    // chains); its opener escape, finishers, Blind gate and Sprint differ and
+    // stay inline.
+    // Battle Druid: no Cower, melee-gated Demoralizing Roar, low-rage Swipe,
+    // no Hurricane; form handling, heals and movement stay inline.
+    void BuildBattleDruidRotation(BotRotationTable& catFinish, BotRotationTable& catBuild,
+        BotRotationTable& bearCore, BotRotationTable& bearAoE, BotRotationTable& caster);
+    static bool BattleDruidCond_DemoralizingRoar(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool BattleDruidCond_Swipe(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
     bool IsWearingShield(Player* pPlayer) const;
     bool IsInDuel() const;
     CombatBotRoles GetRole() const;

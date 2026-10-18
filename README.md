@@ -23,11 +23,13 @@ and player bots that are learning to fight properly.
 
 ### Player bots
 - Bots are being taught to fight from clear priority lists instead of
-  hard-coded per-class scripts, starting with the mage companion. Planned
+  hard-coded per-class scripts, for every class, in groups and in battlegrounds. Planned
   next: simple orders for group bots (follow close, attack my target,
   crowd-control my mark), smarter healers, battleground bots that play
   objectives instead of wandering, and difficulty settings from relaxed
   to sharp.
+- Fixed battleground mages casting polymorph on their current target when
+  they meant to sheep an extra attacker; they now sheep the extra attacker.
 
 ## How to play
 

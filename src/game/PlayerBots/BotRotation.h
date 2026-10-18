@@ -37,8 +37,12 @@ enum BotRotationTarget
 };
 
 // One entry of a spell-priority table. Steps run in order; the first step
-// whose spell is known, whose condition holds, and which passes
-// CanTryToCastSpell is cast, and the rotation stops for this tick.
+// whose spell is known, whose resolved targets are non-null, whose condition
+// holds, and which passes CanTryToCastSpell is cast, and the rotation stops
+// for this tick. The victim may be null (no target yet): VICTIM steps are
+// then skipped while SELF steps still run (OTHER_ATTACKER steps resolve
+// against whoever is attacking), so SELF-step conditions must never
+// dereference the victim argument.
 // Movement and positioning stay inline in the per-class Update functions,
 // never in tables.
 struct BotRotationStep

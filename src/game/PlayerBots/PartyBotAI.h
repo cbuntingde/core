@@ -109,6 +109,46 @@ public:
     BotRotationTable m_rotationMageOpener;
     BotRotationTable m_rotationMageAoE;
     BotRotationTable m_rotationMageCore;
+    // Data-driven paladin rotation (see BuildPaladinRotation). Friend-protect
+    // heals (dynamic lowest-HP target), the healer branch, Seal upkeep, the
+    // DivineFavor+HolyShock pair, movement, Blessing of Freedom and the
+    // sub-30% self-heal stay inline.
+    BotRotationTable m_rotationPaladinPre;
+    BotRotationTable m_rotationPaladinCoreA;
+    BotRotationTable m_rotationPaladinCoreB;
+    // Data-driven shaman rotation (see BuildShamanRotation). ManaTide,
+    // totems, the healer branch and the sub-20% self-heal stay inline.
+    BotRotationTable m_rotationShamanCore;
+    // Data-driven hunter rotation (see BuildHunterRotation). Volley, Auto
+    // Shot, the first-attacker defensive block, melee strikes, aspects and
+    // movement stay inline.
+    BotRotationTable m_rotationHunterCore;
+    // Data-driven priest DPS rotation (see BuildPriestRotation). Defensives,
+    // InnerFocus and the healer branch stay inline; the tables bracket
+    // chasing and the wand fallback.
+    BotRotationTable m_rotationPriestDPSPre;
+    BotRotationTable m_rotationPriestDPSPost;
+    // Data-driven warlock rotation (see BuildWarlockRotation). Banish, Rain
+    // of Fire, Demonic Sacrifice, chasing and the wand fallback stay inline.
+    BotRotationTable m_rotationWarlockCoreA;
+    BotRotationTable m_rotationWarlockCoreB;
+    BotRotationTable m_rotationWarlockCoreC;
+    // Data-driven warrior rotation (see BuildWarriorRotation). Stance dance,
+    // chasing, the rage-gated Cleave/Heroic Strike pair and the no-victim
+    // Battle Shout stay inline.
+    BotRotationTable m_rotationWarriorCoreA;
+    BotRotationTable m_rotationWarriorCoreB;
+    // Data-driven rogue rotation (see BuildRogueRotation). Openers, Vanish,
+    // finishers, Blind, singles and movement stay inline.
+    BotRotationTable m_rotationRogueInterrupt;
+    BotRotationTable m_rotationRogueBuilders;
+    // Data-driven druid rotation (see BuildDruidRotation). Form handling,
+    // heals, stealth opener, closers and movement stay inline.
+    BotRotationTable m_rotationDruidCatFinish;
+    BotRotationTable m_rotationDruidCatBuild;
+    BotRotationTable m_rotationDruidBearCore;
+    BotRotationTable m_rotationDruidBearAoE;
+    BotRotationTable m_rotationDruidCaster;
 };
 
 #endif
