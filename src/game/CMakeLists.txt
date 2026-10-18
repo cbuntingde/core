@@ -442,6 +442,7 @@ set (game_SRCS
     OutdoorPvP/OutdoorPvPSI.h
     PacketBroadcast/MovementBroadcaster.h
     PacketBroadcast/PlayerBroadcaster.h
+    PlayerBots/BotRotation.h
     PlayerBots/CombatBotBaseAI.h
     PlayerBots/PartyBotAI.h
     PlayerBots/BattleBotAI.h

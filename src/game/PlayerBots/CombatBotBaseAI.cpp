@@ -127,6 +127,7 @@ void CombatBotBaseAI::ResetSpellData()
     for (auto& ptr : m_spells.raw.spells)
         ptr = nullptr;
 
+    m_rotationDirty = true;
     m_resurrectionSpell = nullptr;
     m_spellListDirectHeal.clear();
     m_spellListPeriodicHeal.clear();
@@ -136,6 +137,7 @@ void CombatBotBaseAI::ResetSpellData()
 void CombatBotBaseAI::PopulateSpellData()
 {
     // Paladin Seals
+    m_rotationDirty = true;
     SpellEntry const* pSealOfRighteousness = nullptr;
     SpellEntry const* pSealOfCommand = nullptr;
     SpellEntry const* pSealOfFury = nullptr;
@@ -2892,6 +2894,148 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
     }
 
     return result;
+}
+
+bool CombatBotBaseAI::RunRotation(Unit* pVictim, BotRotationTable const& rotation)
+{
+    if (!pVictim)
+        return false;
+
+    for (BotRotationStep const& step : rotation)
+    {
+        if (!step.spell)
+            continue;
+
+        Unit* pCheckTarget = nullptr;
+        switch (step.checkTarget)
+        {
+            case BOT_TARGET_SELF:
+                pCheckTarget = me;
+                break;
+            case BOT_TARGET_VICTIM:
+                pCheckTarget = pVictim;
+                break;
+            case BOT_TARGET_OTHER_ATTACKER:
+                pCheckTarget = SelectAttackerDifferentFrom(pVictim);
+                break;
+            default:
+                break;
+        }
+        if (!pCheckTarget)
+            continue;
+
+        Unit* pCastTarget = nullptr;
+        switch (step.castTarget)
+        {
+            case BOT_TARGET_SELF:
+                pCastTarget = me;
+                break;
+            case BOT_TARGET_VICTIM:
+                pCastTarget = pVictim;
+                break;
+            case BOT_TARGET_OTHER_ATTACKER:
+                pCastTarget = SelectAttackerDifferentFrom(pVictim);
+                break;
+            default:
+                break;
+        }
+        if (!pCastTarget)
+            continue;
+
+        if (step.condition && !step.condition(this, pVictim, pCheckTarget, step.spell))
+            continue;
+
+        if (!CanTryToCastSpell(pCheckTarget, step.spell))
+            continue;
+
+        if (DoCastSpell(pCastTarget, step.spell) == SPELL_CAST_OK)
+            return true;
+    }
+
+    return false;
+}
+
+bool CombatBotBaseAI::MageCond_PyroblastOpener(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    SpellEntry const* pPresenceOfMind = ai->m_spells.mage.pPresenceOfMind;
+    Player* pMe = ai->me;
+    return (pPresenceOfMind && pMe->HasAura(pPresenceOfMind->Id)) ||
+        (!victim->IsInCombat() && (victim->GetMaxHealth() > pMe->GetMaxHealth()) && (pMe->GetDistance(victim) > 30.0f));
+}
+
+bool CombatBotBaseAI::MageCond_IceBlock(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetHealthPercent() < 10.0f;
+}
+
+bool CombatBotBaseAI::MageCond_MageAoE(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetEnemyCountInRadiusAround(ai->me, 10.0f) > 1;
+}
+
+bool CombatBotBaseAI::MageCond_ConeOfCold(CombatBotBaseAI const* ai, Unit const* victim, Unit const* target, SpellEntry const* spell)
+{
+    return !ai->me->IsMoving() && MageCond_MageAoE(ai, victim, target, spell);
+}
+
+bool CombatBotBaseAI::MageCond_Counterspell(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->IsNonMeleeSpellCasted(false, false, true);
+}
+
+bool CombatBotBaseAI::MageCond_Blizzard(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetEnemyCountInRadiusAround(victim, 10.0f) > 2;
+}
+
+bool CombatBotBaseAI::MageCond_Polymorph(CombatBotBaseAI const* ai, Unit const*, Unit const* target, SpellEntry const* spell)
+{
+    return (target->GetHealthPercent() > 20.0f) && ai->CanUseCrowdControl(spell, target);
+}
+
+bool CombatBotBaseAI::MageCond_ArcanePower(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetPowerPercent(POWER_MANA) > 50.0f;
+}
+
+bool CombatBotBaseAI::MageCond_PresenceOfMind(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return ai->me->GetPowerPercent(POWER_MANA) > 50.0f;
+}
+
+bool CombatBotBaseAI::MageCond_Scorch(CombatBotBaseAI const*, Unit const* victim, Unit const*, SpellEntry const*)
+{
+    return victim->GetHealthPercent() < 20.0f;
+}
+
+bool CombatBotBaseAI::MageCond_Evocation(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*)
+{
+    return (ai->me->GetPowerPercent(POWER_MANA) < 30.0f) && (ai->GetAttackersInRangeCount(10.0f) == 0);
+}
+
+void CombatBotBaseAI::BuildMageRotation(BotRotationTable& opener, BotRotationTable& aoe, BotRotationTable& core)
+{
+    opener.clear();
+    opener.push_back({ m_spells.mage.pCombustion, BOT_TARGET_SELF, BOT_TARGET_SELF, nullptr });
+    opener.push_back({ m_spells.mage.pPyroblast, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::MageCond_PyroblastOpener });
+    opener.push_back({ m_spells.mage.pIceBlock, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_IceBlock });
+
+    aoe.clear();
+    aoe.push_back({ m_spells.mage.pConeofCold, BOT_TARGET_SELF, BOT_TARGET_VICTIM, &CombatBotBaseAI::MageCond_ConeOfCold });
+    aoe.push_back({ m_spells.mage.pBlastWave, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_MageAoE });
+    aoe.push_back({ m_spells.mage.pArcaneExplosion, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_MageAoE });
+
+    core.clear();
+    core.push_back({ m_spells.mage.pCounterspell, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::MageCond_Counterspell });
+    core.push_back({ m_spells.mage.pBlizzard, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::MageCond_Blizzard });
+    core.push_back({ m_spells.mage.pPolymorph, BOT_TARGET_OTHER_ATTACKER, BOT_TARGET_OTHER_ATTACKER, &CombatBotBaseAI::MageCond_Polymorph });
+    core.push_back({ m_spells.mage.pArcanePower, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_ArcanePower });
+    core.push_back({ m_spells.mage.pPresenceOfMind, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_PresenceOfMind });
+    core.push_back({ m_spells.mage.pScorch, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, &CombatBotBaseAI::MageCond_Scorch });
+    core.push_back({ m_spells.mage.pFrostbolt, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.mage.pFireBlast, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.mage.pFireball, BOT_TARGET_VICTIM, BOT_TARGET_VICTIM, nullptr });
+    core.push_back({ m_spells.mage.pEvocation, BOT_TARGET_SELF, BOT_TARGET_SELF, &CombatBotBaseAI::MageCond_Evocation });
 }
 
 void CombatBotBaseAI::AddItemToInventory(uint32 itemId, uint32 count)

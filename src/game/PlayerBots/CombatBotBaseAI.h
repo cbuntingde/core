@@ -2,6 +2,7 @@
 #define MANGOS_COMBAT_BOT_BASE_H
 
 #include "PlayerBotAI.h"
+#include "BotRotation.h"
 #include "SpellEntry.h"
 #include "Player.h"
 
@@ -124,6 +125,26 @@ public:
 
     SpellCastResult DoCastSpell(Unit* pTarget, SpellEntry const* pSpellEntry);
     virtual bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+    virtual bool CanUseCrowdControl(SpellEntry const* /*pSpellEntry*/, Unit const* /*pTarget*/) const { return true; }
+
+    // Data-driven rotation framework. Rotations are ordered spell-priority
+    // tables built from m_spells and evaluated by RunRotation; movement and
+    // positioning stay inline in the per-class Update functions. Tables are
+    // rebuilt whenever spell data is (re)populated, flagged by m_rotationDirty.
+    // Returns true when a spell was cast and the caller should end its tick.
+    bool RunRotation(Unit* pVictim, BotRotationTable const& rotation);
+    void BuildMageRotation(BotRotationTable& opener, BotRotationTable& aoe, BotRotationTable& core);
+    static bool MageCond_PyroblastOpener(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool MageCond_IceBlock(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool MageCond_MageAoE(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool MageCond_ConeOfCold(CombatBotBaseAI const* ai, Unit const* victim, Unit const* target, SpellEntry const* spell);
+    static bool MageCond_Counterspell(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool MageCond_Blizzard(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool MageCond_Polymorph(CombatBotBaseAI const* ai, Unit const*, Unit const* target, SpellEntry const* spell);
+    static bool MageCond_ArcanePower(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool MageCond_PresenceOfMind(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
+    static bool MageCond_Scorch(CombatBotBaseAI const* ai, Unit const* victim, Unit const*, SpellEntry const*);
+    static bool MageCond_Evocation(CombatBotBaseAI const* ai, Unit const*, Unit const*, SpellEntry const*);
     bool IsWearingShield(Player* pPlayer) const;
     bool IsInDuel() const;
     CombatBotRoles GetRole() const;
@@ -555,6 +576,9 @@ public:
     } m_spells;
 
     bool m_initialized = false;
+    // Set whenever spell data is reset or (re)populated; migrated rotations
+    // rebuild their tables from m_spells on the next tick, then clear it.
+    bool m_rotationDirty = true;
     bool m_isBuffing = false;
     bool m_preventCasting = false;
     bool m_receivedBgInvite = false;

@@ -312,7 +312,7 @@ bool PartyBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpell
     return true;
 }
 
-bool PartyBotAI::CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget) const
+bool PartyBotAI::CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit const* pTarget) const
 {
     if (IsInDuel())
         return true;
@@ -1741,29 +1741,14 @@ void PartyBotAI::UpdateInCombatAI_Mage()
 {
     if (Unit* pVictim = me->GetVictim())
     {
-        if (m_spells.mage.pCombustion &&
-            CanTryToCastSpell(me, m_spells.mage.pCombustion))
+        if (m_rotationDirty)
         {
-            if (DoCastSpell(me, m_spells.mage.pCombustion) == SPELL_CAST_OK)
-                return;
+            BuildMageRotation(m_rotationMageOpener, m_rotationMageAoE, m_rotationMageCore);
+            m_rotationDirty = false;
         }
 
-        if (m_spells.mage.pPyroblast &&
-           ((m_spells.mage.pPresenceOfMind && me->HasAura(m_spells.mage.pPresenceOfMind->Id)) ||
-            (!pVictim->IsInCombat() && (pVictim->GetMaxHealth() > me->GetMaxHealth()) && (me->GetDistance(pVictim) > 30.0f))) &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pPyroblast))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pPyroblast) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.mage.pIceBlock &&
-           (me->GetHealthPercent() < 10.0f) &&
-            CanTryToCastSpell(me, m_spells.mage.pIceBlock))
-        {
-            if (DoCastSpell(me, m_spells.mage.pIceBlock) == SPELL_CAST_OK)
-                return;
-        }
+        if (RunRotation(pVictim, m_rotationMageOpener))
+            return;
 
         if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
             && me->GetDistance(pVictim) > 30.0f)
@@ -1814,116 +1799,15 @@ void PartyBotAI::UpdateInCombatAI_Mage()
             }
         }
 
-        if (me->GetEnemyCountInRadiusAround(me, 10.0f) > 1)
-        {
-            if (m_spells.mage.pConeofCold && !me->IsMoving() &&
-                CanTryToCastSpell(me, m_spells.mage.pConeofCold))
-            {
-                if (DoCastSpell(pVictim, m_spells.mage.pConeofCold) == SPELL_CAST_OK)
-                    return;
-            }
-
-            if (m_spells.mage.pBlastWave &&
-                CanTryToCastSpell(me, m_spells.mage.pBlastWave))
-            {
-                if (DoCastSpell(me, m_spells.mage.pBlastWave) == SPELL_CAST_OK)
-                    return;
-            }
-
-            if (m_spells.mage.pArcaneExplosion &&
-                CanTryToCastSpell(me, m_spells.mage.pArcaneExplosion))
-            {
-                if (DoCastSpell(me, m_spells.mage.pArcaneExplosion) == SPELL_CAST_OK)
-                    return;
-            }
-        }
+        if (RunRotation(pVictim, m_rotationMageAoE))
+            return;
 
         if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == DISTANCING_MOTION_TYPE)
             return;
 
-        if (m_spells.mage.pCounterspell &&
-            pVictim->IsNonMeleeSpellCasted(false, false, true) &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pCounterspell))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pCounterspell) == SPELL_CAST_OK)
-                return;
-        }
+        if (RunRotation(pVictim, m_rotationMageCore))
+            return;
 
-        if (m_spells.mage.pBlizzard &&
-           (me->GetEnemyCountInRadiusAround(pVictim, 10.0f) > 2) &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pBlizzard))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pBlizzard) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.mage.pPolymorph)
-        {
-            if (Unit* pTarget = SelectAttackerDifferentFrom(pVictim))
-            {
-                if (pTarget->GetHealthPercent() > 20.0f &&
-                    CanTryToCastSpell(pTarget, m_spells.mage.pPolymorph) &&
-                    CanUseCrowdControl(m_spells.mage.pPolymorph, pTarget))
-                {
-                    if (DoCastSpell(pTarget, m_spells.mage.pPolymorph) == SPELL_CAST_OK)
-                        return;
-                }
-            }
-        }
-
-        if (m_spells.mage.pArcanePower &&
-            (me->GetPowerPercent(POWER_MANA) > 50.0f) &&
-            CanTryToCastSpell(me, m_spells.mage.pArcanePower))
-        {
-            if (DoCastSpell(me, m_spells.mage.pArcanePower) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.mage.pPresenceOfMind &&
-           (me->GetPowerPercent(POWER_MANA) > 50.0f) &&
-            CanTryToCastSpell(me, m_spells.mage.pPresenceOfMind))
-        {
-            if (DoCastSpell(me, m_spells.mage.pPresenceOfMind) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.mage.pScorch &&
-           (pVictim->GetHealthPercent() < 20.0f) &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pScorch))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pScorch) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.mage.pFrostbolt &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pFrostbolt))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pFrostbolt) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.mage.pFireBlast &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pFireBlast))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pFireBlast) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.mage.pFireball &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pFireball))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pFireball) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.mage.pEvocation &&
-           (me->GetPowerPercent(POWER_MANA) < 30.0f) &&
-           (GetAttackersInRangeCount(10.0f) == 0) &&
-            CanTryToCastSpell(me, m_spells.mage.pEvocation))
-        {
-            if (DoCastSpell(me, m_spells.mage.pEvocation) == SPELL_CAST_OK)
-                return;
-        }
 
         if (me->HasSpell(PB_SPELL_SHOOT_WAND) &&
            !me->IsMoving() &&

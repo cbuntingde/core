@@ -57,7 +57,7 @@ public:
     Player* SelectResurrectionTarget() const;
     Player* SelectShieldTarget() const;
     Unit* GetMarkedTarget(RaidTargetIcon mark) const;
-    bool CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget) const;
+    bool CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit const* pTarget) const override;
     bool DrinkAndEat();
     bool ShouldAutoRevive() const;
     bool IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy);
@@ -105,6 +105,10 @@ public:
     float m_z = 0.0f;
     float m_o = 0.0f;
     bool m_resetSpellData = false;
+    // Data-driven mage rotation (see BuildMageRotation); movement stays inline.
+    BotRotationTable m_rotationMageOpener;
+    BotRotationTable m_rotationMageAoE;
+    BotRotationTable m_rotationMageCore;
 };
 
 #endif
