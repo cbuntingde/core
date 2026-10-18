@@ -21,6 +21,8 @@
 #include "adtfile.h"
 #include <cstdio>
 
+using namespace std;
+
 char* wdtGetPlainName(char* FileName)
 {
     char* szTemp;

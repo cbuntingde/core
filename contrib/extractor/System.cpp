@@ -58,6 +58,8 @@
 #endif
 
 #include "GridMapDefines.h"
+
+using namespace std;
 extern ArchiveSet gOpenArchives;
 
 typedef struct

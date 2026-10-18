@@ -41,7 +41,7 @@ class WDTFile
     private:
         MPQFile WDT;
         bool maps[64][64];
-        string filename;
+        std::string filename;
 };
 
 #endif

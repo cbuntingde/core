@@ -3,6 +3,8 @@
 #include "wdt.h"
 #include <string.h>
 
+using namespace std;
+
 bool wdt_MWMO::prepareLoadedData()
 {
     if (!isChunk(fcc_txt, "MWMO"))

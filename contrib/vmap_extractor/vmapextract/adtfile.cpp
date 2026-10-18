@@ -23,6 +23,8 @@
 #include <algorithm>
 #include <cstdio>
 
+using namespace std;
+
 #ifdef _WIN32
 #define snprintf _snprintf
 #endif
