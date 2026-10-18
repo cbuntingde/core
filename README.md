@@ -19,6 +19,9 @@ what players type in game, and fully tested builds.
   only sit down to eat and drink when nobody is fighting.
 - Battleground mages now sheep the extra attacker instead of the target
   everyone is already hitting.
+- In Warsong Gulch, bots play positions: some guard the flag room while
+  others attack, escort the carrier, chase the thief, or recover a
+  dropped flag.
 - The download includes an optional add-on that adds the clickable
   panel; its own readme explains how to switch it on.
 

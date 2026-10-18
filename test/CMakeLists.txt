@@ -8,6 +8,7 @@ add_executable(vmangos_tests
     BotStanceTests.cpp
     BotPersonalityTests.cpp
     BotHealerTests.cpp
+    BotObjectiveTests.cpp
 )
 
 target_include_directories(vmangos_tests PRIVATE

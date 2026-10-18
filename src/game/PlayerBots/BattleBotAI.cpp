@@ -598,6 +598,7 @@ void BattleBotAI::OnEnterBattleGround()
 void BattleBotAI::OnLeaveBattleGround()
 {
     ClearPath();
+    m_objective.Reset();
     if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
         StopMoving();
 

@@ -25,6 +25,7 @@
 #include "Battlegrounds/BattleGround.h"
 #include "BattleGroundAV.h"
 #include "BattleGroundWS.h"
+#include "ObjectAccessor.h"
 #include "Geometry.h"
 #include "Utilities/Random.h"
 
@@ -2023,6 +2024,56 @@ static std::pair<uint32, uint32> AV_AllianceDefendObjectives[] =
     { BG_AV_STONEHEARTH_BUNKER, HORDE_ASSAULTED },
 };
 
+// Resolve a flag keeper's live position for chase/escort routing. False when
+// the keeper is gone (logged out, wrong map, dead): callers fall back to a
+// flag room instead of routing nowhere.
+static bool ResolveKeeperPosition(Player* me, ObjectGuid const& keeper, Position& pos)
+{
+    if (keeper.IsEmpty())
+        return false;
+    Player* pKeeper = ObjectAccessor::FindPlayer(keeper);
+    if (!pKeeper || !pKeeper->IsAlive() || !pKeeper->IsInMap(me))
+        return false;
+    pos = pKeeper->GetPosition();
+    return true;
+}
+
+// Resolve a dropped flag's gameobject position for recovery routing.
+static bool ResolveDropPosition(Player* me, BattleGroundWS* pWS, Team team, Position& pos)
+{
+    ObjectGuid const dropGuid = pWS->GetDroppedFlagGuid(team);
+    if (dropGuid.IsEmpty())
+        return false;
+    if (GameObject* pGo = me->GetMap()->GetGameObject(dropGuid))
+    {
+        pos = pGo->GetPosition();
+        return true;
+    }
+    return false;
+}
+
+bool BattleBotAI::AmNearestBotTo(Position const& position) const
+{
+    BattleGround* bg = me->GetBattleGround();
+    if (!bg)
+        return false;
+
+    float const best = me->GetDistance(position);
+    for (const auto& entry : bg->GetPlayers())
+    {
+        if (entry.first == me->GetObjectGuid())
+            continue;
+        if (bg->GetPlayerTeam(entry.first) != me->GetTeam())
+            continue;
+        Player* pOther = ObjectAccessor::FindPlayer(entry.first);
+        if (!pOther || !pOther->IsAlive() || !pOther->IsBot() || !pOther->IsInMap(me))
+            continue;
+        if (pOther->GetDistance(position) < best)
+            return false;
+    }
+    return true;
+}
+
 bool BattleBotAI::StartNewPathToObjective()
 {
     BattleGround* bg = me->GetBattleGround();
@@ -2153,29 +2204,76 @@ bool BattleBotAI::StartNewPathToObjective()
         }
         case BATTLEGROUND_WS:
         {
-            if (me->GetTeam() == HORDE)
+            BattleGroundWS* pWS = static_cast<BattleGroundWS*>(bg);
+            bool const isHorde = me->GetTeam() == HORDE;
+            Position const ownRoom = isHorde ? WS_FLAG_POS_HORDE : WS_FLAG_POS_ALLIANCE;
+            Position const enemyRoom = isHorde ? WS_FLAG_POS_ALLIANCE : WS_FLAG_POS_HORDE;
+
+            // Flag carrier runs the flag home (kept first, as before).
+            if (me->HasAura(AURA_WARSONG_FLAG) || me->HasAura(AURA_SILVERWING_FLAG))
+                return StartNewPathToPosition(ownRoom, vPaths_WS);
+
+            if (!m_objective.HasBaseRole())
+                m_objective.AssignBase(me->GetGUIDLow());
+
+            Team const ownTeam = isHorde ? HORDE : ALLIANCE;
+            Team const enemyTeam = isHorde ? ALLIANCE : HORDE;
+            BotFlagState const ownFlag = BotObjective::MapWsFlagState(pWS->GetFlagState(ownTeam));
+            BotFlagState const enemyFlag = BotObjective::MapWsFlagState(pWS->GetFlagState(enemyTeam));
+
+            // Resolve the contested point for the proximity roll, in the
+            // same priority as BotObjective::FocusForState.
+            Position focusPos = ownRoom;
+            bool haveFocus = false;
+            switch (BotObjective::FocusForState(ownFlag, enemyFlag))
             {
-                if (me->HasAura(AURA_SILVERWING_FLAG))
-                    return StartNewPathToPosition(WS_FLAG_POS_HORDE, vPaths_WS);
-                if (!static_cast<BattleGroundWS*>(bg)->IsAllianceFlagPickedup())
-                {
-                    float const distance = me->GetDistance(WS_FLAG_POS_ALLIANCE);
-                    if (distance > 20.0f && distance < 300.0f)
-                        return StartNewPathToPosition(WS_FLAG_POS_ALLIANCE, vPaths_WS);
-                }
+                case BOT_FOCUS_OWN_KEEPER:
+                    haveFocus = ResolveKeeperPosition(me, isHorde ? pWS->GetHordeFlagPickerGuid() : pWS->GetAllianceFlagPickerGuid(), focusPos);
+                    break;
+                case BOT_FOCUS_OWN_DROP:
+                    haveFocus = ResolveDropPosition(me, pWS, ownTeam, focusPos);
+                    break;
+                case BOT_FOCUS_ENEMY_KEEPER:
+                    haveFocus = ResolveKeeperPosition(me, isHorde ? pWS->GetAllianceFlagPickerGuid() : pWS->GetHordeFlagPickerGuid(), focusPos);
+                    break;
+                case BOT_FOCUS_ENEMY_DROP:
+                    haveFocus = ResolveDropPosition(me, pWS, enemyTeam, focusPos);
+                    break;
+                default:
+                    break;
             }
-            else
+
+            // Carriers short-circuit above, so this is always false here.
+            BotObjectiveRole const role = BotObjective::ReassignRole(m_objective.baseRole, ownFlag, enemyFlag, false, haveFocus && AmNearestBotTo(focusPos));
+
+            Position destination = ownRoom;
+            switch (role)
             {
-                if (me->HasAura(AURA_WARSONG_FLAG))
-                    return StartNewPathToPosition(WS_FLAG_POS_ALLIANCE, vPaths_WS);
-                if (!static_cast<BattleGroundWS*>(bg)->IsHordeFlagPickedup())
-                {
-                    float const distance = me->GetDistance(WS_FLAG_POS_HORDE);
-                    if (distance > 20.0f && distance < 300.0f)
-                        return StartNewPathToPosition(WS_FLAG_POS_HORDE, vPaths_WS);
-                }
+                case BOT_OBJECTIVE_ASSAULT:
+                    destination = enemyRoom;
+                    break;
+                case BOT_OBJECTIVE_ESCORT:
+                    if (!ResolveKeeperPosition(me, isHorde ? pWS->GetAllianceFlagPickerGuid() : pWS->GetHordeFlagPickerGuid(), destination))
+                        destination = enemyRoom;
+                    break;
+                case BOT_OBJECTIVE_CHASE:
+                    if (!ResolveKeeperPosition(me, isHorde ? pWS->GetHordeFlagPickerGuid() : pWS->GetAllianceFlagPickerGuid(), destination))
+                        destination = enemyRoom;
+                    break;
+                case BOT_OBJECTIVE_RECOVER:
+                    if (ownFlag == BOT_FLAG_DROPPED)
+                    {
+                        if (!ResolveDropPosition(me, pWS, ownTeam, destination))
+                            destination = ownRoom;
+                    }
+                    else if (!ResolveDropPosition(me, pWS, enemyTeam, destination))
+                        destination = enemyRoom;
+                    break;
+                default:
+                    break;
             }
-            break;
+
+            return StartNewPathToPosition(destination, vPaths_WS);
         }
     }
 

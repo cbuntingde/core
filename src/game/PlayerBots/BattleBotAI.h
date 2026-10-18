@@ -18,6 +18,7 @@
 #define MANGOS_BattleBotAI_H
 
 #include "CombatBotBaseAI.h"
+#include "BotObjective.h"
 #include "BattleBotWaypoints.h"
 
 enum BattleBotWsgWaitSpot
@@ -113,12 +114,16 @@ public:
     bool StartNewPathToObjective();
     bool StartNewPathToPosition(Position const& position, std::vector<BattleBotPath*> const& vPaths);
     void ClearPath();
+    bool AmNearestBotTo(Position const& position) const;
     void StopMoving();
     bool m_doingGraveyardJump = false;
     bool m_movingInReverse = false;
     uint32 m_currentPoint = 0;
     BattleBotPath* m_currentPath = nullptr;
     uint8 m_waitingSpot = BB_WSG_WAIT_SPOT_SPAWN;
+    // Objective role (Warsong Gulch): sticky defend/assault base plus
+    // per-tick reassignment on flag pickup/drop/capture/return.
+    BotObjective m_objective;
     // Data-driven rotations (see BuildBattle*Rotation); movement, flag logic
     // and dynamic-target support stay inline.
     BotRotationTable m_rotationBattlePaladinCoreA;
