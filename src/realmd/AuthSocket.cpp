@@ -309,11 +309,11 @@ void AuthSocket::ReadChallengeRequest(char const* logPrefix, std::function<void(
                 return;
             }
 
-            // Escape the user input used in DB to avoid further SQL injection
-            // Memory will be freed on AuthSocket object destruction
+            // m_safelogin carries the raw login name; every DB use binds it as a parameter.
+
             self->m_login = (const char*)body->username;
             self->m_safelogin = self->m_login;
-            LoginDatabase.escape_string(self->m_safelogin);
+
 
             onBody(body);
         });
@@ -336,11 +336,13 @@ void AuthSocket::_HandleLogonChallenge()
         std::string clientIpAddress = self->GetRemoteIpString();
 
         // Check if the IP is banned
-        std::string safeIp = clientIpAddress;
-        LoginDatabase.escape_string(safeIp);
-        std::unique_ptr<QueryResult> ipBanResult = LoginDatabase.PQuery(
-            "SELECT 1 FROM `ip_banned` WHERE `ip` = '%s' AND (`unbandate` = `bandate` OR `unbandate` > UNIX_TIMESTAMP()) LIMIT 1",
-            safeIp.c_str());
+        static SqlStatementID selIpBan;
+        SqlStatement ipBanStmt = LoginDatabase.CreateStatement(selIpBan, "SELECT 1 FROM `ip_banned` WHERE `ip` = ? AND (`unbandate` = `bandate` OR `unbandate` > UNIX_TIMESTAMP()) LIMIT 1");
+        ipBanStmt.addString(clientIpAddress);
+        std::unique_ptr<QueryResult> ipBanResult = ipBanStmt.PQuery();
+
+
+
         if (ipBanResult)
         {
             *pkt << uint8(WOW_FAIL_FAIL_NOACCESS);
@@ -375,9 +377,12 @@ void AuthSocket::_HandleLogonChallenge()
         }
 
         // Get the account details from the account table
-        // No SQL injection (escaped username)
+        // Username travels as a bound parameter.
         //                                                                            0     1         2          3    4    5           6              7              8       9
-        std::unique_ptr<QueryResult> sqlAccountResult = LoginDatabase.PQuery("SELECT `id`, `locked`, `last_ip`, `v`, `s`, `security`, `email_verif`, `geolock_pin`, `email`, UNIX_TIMESTAMP(`joindate`) FROM `account` WHERE `username` = '%s'", self->m_safelogin.c_str());
+        static SqlStatementID selAccount;
+        SqlStatement accountStmt = LoginDatabase.CreateStatement(selAccount, "SELECT `id`, `locked`, `last_ip`, `v`, `s`, `security`, `email_verif`, `geolock_pin`, `email`, UNIX_TIMESTAMP(`joindate`) FROM `account` WHERE `username` = ?");
+        accountStmt.addString(self->m_safelogin);
+        std::unique_ptr<QueryResult> sqlAccountResult = accountStmt.PQuery();
         if (sqlAccountResult)
         {
             Field* fields = sqlAccountResult->Fetch();
@@ -461,7 +466,10 @@ void AuthSocket::_HandleLogonChallenge()
                 uint32 pendingAccountId = fields[0].GetUInt32();
 
                 // If the account is banned, reject the logon attempt
-                std::unique_ptr<QueryResult> sqlAccountBanResult = LoginDatabase.PQuery("SELECT `bandate`, `unbandate` FROM `account_banned` WHERE `id` = %u AND `active` = 1 AND (`unbandate` > UNIX_TIMESTAMP() OR `unbandate` = `bandate`) LIMIT 1", pendingAccountId);
+                static SqlStatementID selAccountBan;
+                SqlStatement accountBanStmt = LoginDatabase.CreateStatement(selAccountBan, "SELECT `bandate`, `unbandate` FROM `account_banned` WHERE `id` = ? AND `active` = 1 AND (`unbandate` > UNIX_TIMESTAMP() OR `unbandate` = `bandate`) LIMIT 1");
+                accountBanStmt.addUInt32(pendingAccountId);
+                std::unique_ptr<QueryResult> sqlAccountBanResult = accountBanStmt.PQuery();
                 if (sqlAccountBanResult)
                 {
                     uint64_t banTimestamp = (*sqlAccountBanResult)[0].GetUInt64();
@@ -535,7 +543,7 @@ void AuthSocket::_HandleLogonChallenge()
         else
         { // no account
             *pkt << (uint8) WOW_FAIL_UNKNOWN_ACCOUNT;
-            RecordWrongPasswordAttempt(safeIp);
+            RecordWrongPasswordAttempt(clientIpAddress);
         }
 
         self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error)
@@ -759,7 +767,10 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
         // Geolocking checks must be done after an otherwise successful login to prevent lockout attacks
         if (m_geoUnlockPIN) // remove the PIN to unlock the account since login succeeded
         {
-            bool result = LoginDatabase.PExecute("UPDATE `account` SET `geolock_pin` = 0 WHERE `username` = '%s'", m_safelogin.c_str());
+            static SqlStatementID updGeolockPin;
+            SqlStatement geolockStmt = LoginDatabase.CreateStatement(updGeolockPin, "UPDATE `account` SET `geolock_pin` = 0 WHERE `username` = ?");
+            geolockStmt.addString(m_safelogin);
+            bool result = geolockStmt.Execute();
             if (!result)
             {
                 sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Unable to remove geolock PIN for %s - account has not been unlocked", m_safelogin.c_str());
@@ -770,7 +781,11 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
             sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "Account '%s' (%u) using IP '%s' has been geolocked", m_login.c_str(), m_accountId, GetRemoteIpString().c_str()); // todo, add additional logging info
 
             uint32_t pin = urand(100000, 999999); // check rand32_max
-            bool result = LoginDatabase.PExecute("UPDATE `account` SET `geolock_pin` = %u WHERE `username` = '%s'", pin, m_safelogin.c_str());
+            static SqlStatementID updGeolockPinSet;
+            SqlStatement geolockSetStmt = LoginDatabase.CreateStatement(updGeolockPinSet, "UPDATE `account` SET `geolock_pin` = ? WHERE `username` = ?");
+            geolockSetStmt.addUInt32(pin);
+            geolockSetStmt.addString(m_safelogin);
+            bool result = geolockSetStmt.Execute();
             if (!result)
             {
                 sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Unable to write geolock PIN for %s - account has not been locked", m_safelogin.c_str());
@@ -825,12 +840,20 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
         ClearWrongPasswordCount(GetRemoteIpString());
 
         // Update the sessionkey, last_ip, last login time and reset number of failed logins in the account table for this account
-        // No SQL injection (escaped username) and IP address as received by socket
+        // Username and IP travel as bound parameters.
         std::string K_hex = srp.GetStrongSessionKey().AsHexStr();
         // Why it must be sync: The new network implementation is so fast that the async db cant execute the UPDATE statement before the client tries to reach mangosd
         // If it is async there would be a race condition
-        bool result = LoginDatabase.PExecute(DbExecMode::MustBeSync, "UPDATE `account` SET `sessionkey` = '%s', `last_ip` = '%s', `last_login` = NOW(), `locale` = '%u', `os` = '%s', `platform` = '%s' WHERE `username` = '%s'",
-                                             K_hex.c_str(), GetRemoteIpString().c_str(), GetLocaleByName(m_localizationName), m_os.c_str(), m_platform.c_str(), m_safelogin.c_str() );
+        static SqlStatementID updLoginStats;
+        SqlStatement loginStatsStmt = LoginDatabase.CreateStatement(updLoginStats, "UPDATE `account` SET `sessionkey` = ?, `last_ip` = ?, `last_login` = NOW(), `locale` = ?, `os` = ?, `platform` = ? WHERE `username` = ?");
+        loginStatsStmt.addString(K_hex);
+        loginStatsStmt.addString(GetRemoteIpString());
+        loginStatsStmt.addUInt32(uint32(GetLocaleByName(m_localizationName)));
+        loginStatsStmt.addString(m_os);
+        loginStatsStmt.addString(m_platform);
+        loginStatsStmt.addString(m_safelogin);
+        bool result = loginStatsStmt.DirectExecute();
+
         if (!result)
         {
             sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Unable to update login stats for account '%s'", m_safelogin.c_str());
@@ -878,7 +901,10 @@ void AuthSocket::_HandleReconnectChallenge()
 
     ReadChallengeRequest("ReconnectChallenge", [self = shared_from_this()](std::shared_ptr<sAuthLogonChallengeBody> const& body) -> void
     {
-        std::unique_ptr<QueryResult> queryResult = LoginDatabase.PQuery("SELECT `sessionkey`, `id` FROM `account` WHERE `username` = '%s'", self->m_safelogin.c_str());
+        static SqlStatementID selSessionKey;
+        SqlStatement sessionKeyStmt = LoginDatabase.CreateStatement(selSessionKey, "SELECT `sessionkey`, `id` FROM `account` WHERE `username` = ?");
+        sessionKeyStmt.addString(self->m_safelogin);
+        std::unique_ptr<QueryResult> queryResult = sessionKeyStmt.PQuery();
 
         // Stop if the account is not found
         if (!queryResult)
@@ -1041,8 +1067,12 @@ void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer &pkt)
         {
             uint8 AmountOfCharacters;
 
-            // No SQL injection. id of realm is controlled by the database.
-            std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `numchars` FROM `realmcharacters` WHERE `realmid` = '%d' AND `acctid`='%u'", i->second.id, m_accountId);
+            // Realm and account ids are bound parameters.
+            static SqlStatementID selRealmChars;
+            SqlStatement realmCharsStmt = LoginDatabase.CreateStatement(selRealmChars, "SELECT `numchars` FROM `realmcharacters` WHERE `realmid` = ? AND `acctid` = ?");
+            realmCharsStmt.addUInt32(i->second.id);
+            realmCharsStmt.addUInt32(m_accountId);
+            std::unique_ptr<QueryResult> result = realmCharsStmt.PQuery();
             if (result)
             {
                 Field *fields = result->Fetch();
@@ -1096,8 +1126,12 @@ void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer &pkt)
         {
             uint8 AmountOfCharacters;
 
-            // No SQL injection. id of realm is controlled by the database.
-            std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `numchars` FROM `realmcharacters` WHERE `realmid` = '%d' AND `acctid`='%u'", i->second.id, m_accountId);
+            // Realm and account ids are bound parameters.
+            static SqlStatementID selRealmChars;
+            SqlStatement realmCharsStmt = LoginDatabase.CreateStatement(selRealmChars, "SELECT `numchars` FROM `realmcharacters` WHERE `realmid` = ? AND `acctid` = ?");
+            realmCharsStmt.addUInt32(i->second.id);
+            realmCharsStmt.addUInt32(m_accountId);
+            std::unique_ptr<QueryResult> result = realmCharsStmt.PQuery();
             if (result)
             {
                 Field *fields = result->Fetch();
@@ -1340,7 +1374,10 @@ void AuthSocket::InitAndHandOverControlToPatchHandler()
 
 void AuthSocket::LoadAccountSecurityLevels(uint32 accountId)
 {
-    std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `gmlevel`, `RealmID` FROM `account_access` WHERE `id` = %u", accountId);
+    static SqlStatementID selAccountAccess;
+    SqlStatement accountAccessStmt = LoginDatabase.CreateStatement(selAccountAccess, "SELECT `gmlevel`, `RealmID` FROM `account_access` WHERE `id` = ?");
+    accountAccessStmt.addUInt32(accountId);
+    std::unique_ptr<QueryResult> result = accountAccessStmt.PQuery();
     if (!result)
         return; // The account has no special permissions (most likely a normal user)
 
@@ -1373,21 +1410,17 @@ bool AuthSocket::GeographicalLockCheck()
         return false;
     }
 
-    auto result = std::unique_ptr<QueryResult>(LoginDatabase.PQuery(
-        "SELECT INET_ATON('%s') AS ip, network_start_integer, geoname_id, registered_country_geoname_id "
-        "FROM geoip "
-        "WHERE network_last_integer >= INET_ATON('%s') "
-        "ORDER BY network_last_integer ASC LIMIT 1",
-        GetRemoteIpString().c_str(), GetRemoteIpString().c_str())
-        );
+    static SqlStatementID selGeoIp;
+    SqlStatement geoIpStmt = LoginDatabase.CreateStatement(selGeoIp, "SELECT INET_ATON(?) AS ip, network_start_integer, geoname_id, registered_country_geoname_id FROM geoip WHERE network_last_integer >= INET_ATON(?) ORDER BY network_last_integer ASC LIMIT 1");
+    geoIpStmt.addString(GetRemoteIpString());
+    geoIpStmt.addString(GetRemoteIpString());
+    std::unique_ptr<QueryResult> result = geoIpStmt.PQuery();
 
-    auto result_prev = std::unique_ptr<QueryResult>(LoginDatabase.PQuery(
-        "SELECT INET_ATON('%s') AS ip, network_start_integer, geoname_id, registered_country_geoname_id "
-        "FROM geoip "
-        "WHERE network_last_integer >= INET_ATON('%s') "
-        "ORDER BY network_last_integer ASC LIMIT 1",
-        m_lastIP.c_str(), m_lastIP.c_str())
-        );
+    static SqlStatementID selGeoIpPrev;
+    SqlStatement geoIpPrevStmt = LoginDatabase.CreateStatement(selGeoIpPrev, "SELECT INET_ATON(?) AS ip, network_start_integer, geoname_id, registered_country_geoname_id FROM geoip WHERE network_last_integer >= INET_ATON(?) ORDER BY network_last_integer ASC LIMIT 1");
+    geoIpPrevStmt.addString(m_lastIP);
+    geoIpPrevStmt.addString(m_lastIP);
+    std::unique_ptr<QueryResult> result_prev = geoIpPrevStmt.PQuery();
 
     if (!result && !result_prev)
     {

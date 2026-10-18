@@ -324,6 +324,7 @@ class SqlStatement
     protected:
         //don't allow anyone except Database class to create static SqlStatement objects
         friend class Database;
+        friend class SqlQueryHolder;
         SqlStatement(SqlStatementID const& index, Database& db) : m_index(index), m_pDB(&db), m_pParams(nullptr) {}
 
     private:

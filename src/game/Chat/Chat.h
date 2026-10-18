@@ -312,6 +312,7 @@ class ChatHandler
         bool HandleBattleBotAddWarsongCommand(char* args);
         bool HandleBattleBotRemoveCommand(char* args);
         bool HandleBattleBotRemoveAllCommand(char* args);
+        bool HandleBattleBotSkillCommand(char* args);
         bool HandleBattleBotShowPathCommand(char* args);
         bool HandleBattleBotShowAllPathsCommand(char* args);
 

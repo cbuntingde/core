@@ -542,8 +542,12 @@ bool ChatHandler::HandleBanAllIPCommand(char* args)
     uint32 minId = GetAccessLevel() < SEC_ADMINISTRATOR ? 100 : 0; // Don't show GM accounts
 
     std::string ip = ipStr;
-    LoginDatabase.escape_string(ip);
-    std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `id`, `username` FROM `account` WHERE `id` >= %u AND `last_ip` LIKE CONCAT('%s','%%')", minId, ip.c_str());
+
+    static SqlStatementID selBanAllIp;
+    SqlStatement banAllIpStmt = LoginDatabase.CreateStatement(selBanAllIp, "SELECT `id`, `username` FROM `account` WHERE `id` >= ? AND `last_ip` LIKE CONCAT(?, '%%')");
+    banAllIpStmt.addUInt32(minId);
+    banAllIpStmt.addString(ip);
+    std::unique_ptr<QueryResult> result = banAllIpStmt.PQuery();
     if (!result)
     {
         PSendSysMessage("No account found on IP '%s'", ip.c_str());
@@ -816,8 +820,11 @@ bool ChatHandler::HandleBanInfoIPCommand(char* args)
 
     std::string IP = cIP;
 
-    LoginDatabase.escape_string(IP);
-    std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `ip`, FROM_UNIXTIME(`bandate`), FROM_UNIXTIME(`unbandate`), `unbandate`-UNIX_TIMESTAMP(), `banreason`,`bannedby`,`unbandate`-`bandate` FROM `ip_banned` WHERE `ip` = '%s'", IP.c_str());
+
+    static SqlStatementID selBanInfoIp;
+    SqlStatement banInfoIpStmt = LoginDatabase.CreateStatement(selBanInfoIp, "SELECT `ip`, FROM_UNIXTIME(`bandate`), FROM_UNIXTIME(`unbandate`), `unbandate`-UNIX_TIMESTAMP(), `banreason`,`bannedby`,`unbandate`-`bandate` FROM `ip_banned` WHERE `ip` = ?");
+    banInfoIpStmt.addString(IP);
+    std::unique_ptr<QueryResult> result = banInfoIpStmt.PQuery();
     if (!result)
     {
         PSendSysMessage(LANG_BANINFO_NOIP);
@@ -841,8 +848,11 @@ bool ChatHandler::HandleBanListCharacterCommand(char* args)
         return false;
 
     std::string filter = cFilter;
-    CharacterDatabase.escape_string(filter);
-    std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery("SELECT `account` FROM `characters` WHERE `name` LIKE CONCAT('%s','%%')", filter.c_str());
+
+    static SqlStatementID selBanListChar;
+    SqlStatement banListCharStmt = CharacterDatabase.CreateStatement(selBanListChar, "SELECT `account` FROM `characters` WHERE `name` LIKE CONCAT(?, '%%')");
+    banListCharStmt.addString(filter);
+    std::unique_ptr<QueryResult> result = banListCharStmt.PQuery();
     if (!result)
     {
         PSendSysMessage(LANG_BANLIST_NOCHARACTER);
@@ -858,7 +868,6 @@ bool ChatHandler::HandleBanListAccountCommand(char* args)
 
     char* cFilter = ExtractLiteralArg(&args);
     std::string filter = cFilter ? cFilter : "";
-    LoginDatabase.escape_string(filter);
 
     std::unique_ptr<QueryResult> result;
 
@@ -869,9 +878,10 @@ bool ChatHandler::HandleBanListAccountCommand(char* args)
     }
     else
     {
-        result = LoginDatabase.PQuery("SELECT `account`.`id`, `username` FROM `account`, `account_banned`"
-                                      " WHERE `account`.`id` = `account_banned`.`id` AND `active` = 1 AND `username` LIKE CONCAT('%s','%%')" " GROUP BY `account`.`id`",
-                                      filter.c_str());
+        static SqlStatementID selBanListAccount;
+        SqlStatement banListAccountStmt = LoginDatabase.CreateStatement(selBanListAccount, "SELECT `account`.`id`, `username` FROM `account`, `account_banned` WHERE `account`.`id` = `account_banned`.`id` AND `active` = 1 AND `username` LIKE CONCAT(?, '%%') GROUP BY `account`.`id`");
+        banListAccountStmt.addString(filter);
+        result = banListAccountStmt.PQuery();
     }
 
     if (!result)
@@ -895,7 +905,9 @@ bool ChatHandler::HandleBanListHelper(std::unique_ptr<QueryResult> result)
             Field* fields = result->Fetch();
             uint32 accountid = fields[0].GetUInt32();
 
-            std::unique_ptr<QueryResult> banresult = LoginDatabase.PQuery("SELECT `account`.`username` FROM `account`,`account_banned` WHERE `account_banned`.`id`='%u' AND `account_banned`.`id`=`account`.`id`", accountid);
+                static SqlStatementID selBanInfoAccount;
+                SqlStatement banInfoAccountStmt = LoginDatabase.CreateStatement(selBanInfoAccount, "SELECT `account`.`username` FROM `account`,`account_banned` WHERE `account_banned`.`id` = ? AND `account_banned`.`id` = `account`.`id`");
+                std::unique_ptr<QueryResult> banresult = banInfoAccountStmt.PQuery(accountid);
             if (banresult)
             {
                 Field* fields2 = banresult->Fetch();
@@ -967,7 +979,6 @@ bool ChatHandler::HandleBanListIPCommand(char* args)
 
     char* cFilter = ExtractLiteralArg(&args);
     std::string filter = cFilter ? cFilter : "";
-    LoginDatabase.escape_string(filter);
 
     std::unique_ptr<QueryResult> result;
 
@@ -979,9 +990,10 @@ bool ChatHandler::HandleBanListIPCommand(char* args)
     }
     else
     {
-        result = LoginDatabase.PQuery("SELECT `ip`,`bandate`,`unbandate`,`bannedby`,`banreason` FROM `ip_banned`"
-                                      " WHERE (`bandate`=`unbandate` OR `unbandate`>UNIX_TIMESTAMP()) AND `ip` LIKE CONCAT('%s','%%')"
-                                      " ORDER BY `unbandate`", filter.c_str());
+        static SqlStatementID selBanListIp;
+        SqlStatement banListIpStmt = LoginDatabase.CreateStatement(selBanListIp, "SELECT `ip`,`bandate`,`unbandate`,`bannedby`,`banreason` FROM `ip_banned` WHERE (`bandate`=`unbandate` OR `unbandate`>UNIX_TIMESTAMP()) AND `ip` LIKE CONCAT(?, '%%') ORDER BY `unbandate`");
+        banListIpStmt.addString(filter);
+        result = banListIpStmt.PQuery();
     }
 
     if (!result)

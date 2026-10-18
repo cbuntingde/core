@@ -51,11 +51,14 @@ bool ChatHandler::HandleGameObjectTargetCommand(char* args)
         else
         {
             std::string name = cId;
-            WorldDatabase.escape_string(name);
-            result = WorldDatabase.PQuery(
-                         "SELECT guid, id, position_x, position_y, position_z, orientation, map, (POW(position_x - %f, 2) + POW(position_y - %f, 2) + POW(position_z - %f, 2)) AS order_ "
-                         "FROM gameobject,gameobject_template WHERE gameobject_template.entry = gameobject.id AND map = %i AND name LIKE CONCAT('%%','%s','%%')"" ORDER BY order_ ASC LIMIT 1",
-                         pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), pl->GetMapId(), name.c_str());
+            static SqlStatementID selGoByName;
+            SqlStatement goByNameStmt = WorldDatabase.CreateStatement(selGoByName, "SELECT guid, id, position_x, position_y, position_z, orientation, map, (POW(position_x - ?, 2) + POW(position_y - ?, 2) + POW(position_z - ?, 2)) AS order_ FROM gameobject,gameobject_template WHERE gameobject_template.entry = gameobject.id AND map = ? AND name LIKE CONCAT('%%', ?, '%%') ORDER BY order_ ASC LIMIT 1");
+            goByNameStmt.addFloat(pl->GetPositionX());
+            goByNameStmt.addFloat(pl->GetPositionY());
+            goByNameStmt.addFloat(pl->GetPositionZ());
+            goByNameStmt.addUInt32(pl->GetMapId());
+            goByNameStmt.addString(name);
+            result = goByNameStmt.PQuery();
         }
     }
     else

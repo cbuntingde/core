@@ -157,7 +157,11 @@ bool ChatHandler::HandleAntiSpamAdd(char* args)
         return false;
     }
 
-    LoginDatabase.PExecute("INSERT INTO `antispam_blacklist` (`word`, `ban`) VALUES('%s', %u);", word.c_str(), ban);
+    static SqlStatementID insSpamWord;
+    SqlStatement insWordStmt = LoginDatabase.CreateStatement(insSpamWord, "INSERT INTO `antispam_blacklist` (`word`, `ban`) VALUES(?, ?);");
+    insWordStmt.addString(word);
+    insWordStmt.addUInt32(ban);
+    insWordStmt.Execute();
     PSendSysMessage("[AntiSpam]: Word %s with ban value %u added to antispam_blacklist table.", word.c_str(), ban);
 
     return true;
@@ -176,7 +180,10 @@ bool ChatHandler::HandleAntiSpamRemove(char* args)
     }
     std::string word = wordStr;
 
-    LoginDatabase.PExecute("DELETE FROM `antispam_blacklist` WHERE `word`='%s';", word.c_str());
+    static SqlStatementID delSpamWord;
+    SqlStatement delWordStmt = LoginDatabase.CreateStatement(delSpamWord, "DELETE FROM `antispam_blacklist` WHERE `word`=?;");
+    delWordStmt.addString(word);
+    delWordStmt.Execute();
 
     PSendSysMessage("[AntiSpam]: Word %s has been removed from antispam_blacklist table.", word.c_str());
 
@@ -206,7 +213,11 @@ bool ChatHandler::HandleAntiSpamReplace(char* args)
 
     std::string to = toStr;
 
-    LoginDatabase.PExecute("INSERT INTO `antispam_replacement` (`from`, `to`) VALUES('%s', '%s');", from.c_str(), to.c_str());
+    static SqlStatementID insSpamReplace;
+    SqlStatement insReplaceStmt = LoginDatabase.CreateStatement(insSpamReplace, "INSERT INTO `antispam_replacement` (`from`, `to`) VALUES(?, ?);");
+    insReplaceStmt.addString(from);
+    insReplaceStmt.addString(to);
+    insReplaceStmt.Execute();
     PSendSysMessage("[AntiSpam]: Added replace letter %s to %s added to antispam_replacement table.", from.c_str(), to.c_str());
 
     return true;
@@ -226,7 +237,10 @@ bool ChatHandler::HandleAntiSpamRemoveReplace(char* args)
 
     std::string from = fromStr;
 
-    LoginDatabase.PExecute("DELETE FROM `antispam_replacement` WHERE `from`='%s';", from.c_str());
+    static SqlStatementID delSpamReplace;
+    SqlStatement delReplaceStmt = LoginDatabase.CreateStatement(delSpamReplace, "DELETE FROM `antispam_replacement` WHERE `from`=?;");
+    delReplaceStmt.addString(from);
+    delReplaceStmt.Execute();
     PSendSysMessage("[AntiSpam]: From word %s is removed from antispam_replacement table.", from.c_str());
 
     return true;

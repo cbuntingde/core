@@ -2596,14 +2596,11 @@ public:
 // Ban an account or ban an IP address, duration_secs if it is positive used, otherwise permban
 BanReturn World::BanAccount(BanMode mode, std::string nameOrIP, uint32 duration_secs, std::string reason, std::string author)
 {
-    LoginDatabase.escape_string(nameOrIP);
-    LoginDatabase.escape_string(reason);
-    std::string safe_author = author;
-    LoginDatabase.escape_string(safe_author);
+    // nameOrIP, reason and author travel as bound parameters below, never interpolated.
 
     PlayerCacheData const* authorData = sObjectMgr.GetPlayerDataByName(author);
 
-    BanQueryHolder* holder = new BanQueryHolder(mode, nameOrIP, duration_secs, reason, realmID, safe_author,
+    BanQueryHolder* holder = new BanQueryHolder(mode, nameOrIP, duration_secs, reason, realmID, author,
         authorData ? authorData->uiAccount : 0);
 
     holder->SetSize(1);
@@ -2613,27 +2610,48 @@ BanReturn World::BanAccount(BanMode mode, std::string nameOrIP, uint32 duration_
     switch (mode)
     {
         case BAN_IP:
-            //No SQL injection as strings are escaped
+        {
+            // Strings travel as bound parameters, not interpolated text
             db = &LoginDatabase;
 
-            holder->SetPQuery(0, "SELECT `id` FROM `account` WHERE `last_ip` = '%s'", nameOrIP.c_str());
-            LoginDatabase.PExecute("INSERT INTO `ip_banned` VALUES ('%s',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+%u,'%s','%s')", nameOrIP.c_str(), duration_secs, safe_author.c_str(), reason.c_str());
+            static SqlStatementID selBanIp;
+            SqlStatement banIpStmt = LoginDatabase.CreateStatement(selBanIp, "SELECT `id` FROM `account` WHERE `last_ip` = ?");
+            banIpStmt.addString(nameOrIP);
+            holder->SetPreparedQuery(0, banIpStmt);
+            static SqlStatementID insIpBan;
+            SqlStatement insIpStmt = LoginDatabase.CreateStatement(insIpBan, "INSERT INTO `ip_banned` VALUES (?,UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+?, ?, ?)");
+            insIpStmt.addString(nameOrIP);
+            insIpStmt.addUInt32(duration_secs);
+            insIpStmt.addString(author);
+            insIpStmt.addString(reason);
+            insIpStmt.Execute();
 
             if (duration_secs > 0)
                 sAccountMgr.BanIP(nameOrIP, time(nullptr) + duration_secs);
             else
                 sAccountMgr.BanIP(nameOrIP, 0xFFFFFFFF);
             break;
+        }
         case BAN_ACCOUNT:
-            //No SQL injection as string is escaped
+        {
+            // Strings travel as bound parameters, not interpolated text
             db = &LoginDatabase;
-            holder->SetPQuery(0, "SELECT `id` FROM `account` WHERE `username` = '%s'", nameOrIP.c_str());
+            static SqlStatementID selBanAccount;
+            SqlStatement banAccountStmt = LoginDatabase.CreateStatement(selBanAccount, "SELECT `id` FROM `account` WHERE `username` = ?");
+            banAccountStmt.addString(nameOrIP);
+            holder->SetPreparedQuery(0, banAccountStmt);
             break;
+        }
         case BAN_CHARACTER:
         {
             db = &CharacterDatabase;
             if (uint32 guid = sObjectMgr.GetPlayerGuidByName(nameOrIP))
-                holder->SetPQuery(0, "SELECT `account` FROM `characters` WHERE `guid` = %u", guid);
+            {
+                static SqlStatementID selBanCharacter;
+                SqlStatement banCharacterStmt = CharacterDatabase.CreateStatement(selBanCharacter, "SELECT `account` FROM `characters` WHERE `guid` = ?");
+                banCharacterStmt.addUInt32(guid);
+                holder->SetPreparedQuery(0, banCharacterStmt);
+            }
             break;
         }
         default:

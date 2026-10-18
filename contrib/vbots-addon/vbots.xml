@@ -39,7 +39,7 @@
 	<!-- Compact bot panel: one column of labeled sections. All buttons are
 	     22px tall; rows step 26px; columns step to fit a 280px frame. -->
 	<Frame name="vbotsFrame" toplevel="true" movable="true" enableMouse="true" parent="UIParent" hidden="true">
-		<Size x="280" y="610"/>
+		<Size x="280" y="640"/>
 		<Anchors>
 			<Anchor point="CENTER"/>
 		</Anchors>
@@ -199,6 +199,16 @@
 					<Anchor point="TOPLEFT">
 						<Offset>
 							<AbsDimension x="12" y="-558"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</FontString>
+			<FontString name="vbotsBattleSkillHeader" inherits="GameFontNormalSmall" text="Battle skill (selected or all)">
+				<Size x="256" y="14"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="12" y="-584"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -968,6 +978,51 @@
 				<Scripts>
 					<OnClick>
 						SubPartyBotSkill("sharp");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotSkillCasual" inherits="UIPanelButtonTemplate" text="Casual">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-600"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotSkill("casual");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotSkillNormal" inherits="UIPanelButtonTemplate" text="Normal">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="96" y="-600"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotSkill("normal");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotSkillSharp" inherits="UIPanelButtonTemplate" text="Sharp">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="184" y="-600"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotSkill("sharp");
 					</OnClick>
 				</Scripts>
 			</Button>

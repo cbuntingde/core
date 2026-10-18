@@ -458,8 +458,10 @@ bool ChatHandler::HandleGoCreatureCommand(char* args)
         else
         {
             std::string name = pParam1;
-            WorldDatabase.escape_string(name);
-            std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT guid FROM creature, creature_template WHERE creature.id = creature_template.entry AND creature_template.name LIKE CONCAT('%%','%s','%%')", name.c_str());
+            static SqlStatementID selCreatureTeleName;
+            SqlStatement creatureTeleNameStmt = WorldDatabase.CreateStatement(selCreatureTeleName, "SELECT guid FROM creature, creature_template WHERE creature.id = creature_template.entry AND creature_template.name LIKE CONCAT('%%', ?, '%%')");
+            creatureTeleNameStmt.addString(name);
+            std::unique_ptr<QueryResult> result = creatureTeleNameStmt.PQuery();
             if (!result)
             {
                 SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
@@ -611,8 +613,10 @@ bool ChatHandler::HandleGoObjectCommand(char* args)
         else
         {
             std::string name = pParam1;
-            WorldDatabase.escape_string(name);
-            std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT guid FROM gameobject, gameobject_template WHERE gameobject.id = gameobject_template.entry AND gameobject_template.name LIKE CONCAT('%%','%s','%%')", name.c_str());
+            static SqlStatementID selGoTeleName;
+            SqlStatement goTeleNameStmt = WorldDatabase.CreateStatement(selGoTeleName, "SELECT guid FROM gameobject, gameobject_template WHERE gameobject.id = gameobject_template.entry AND gameobject_template.name LIKE CONCAT('%%', ?, '%%')");
+            goTeleNameStmt.addString(name);
+            std::unique_ptr<QueryResult> result = goTeleNameStmt.PQuery();
             if (!result)
             {
                 SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);

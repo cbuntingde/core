@@ -923,13 +923,16 @@ bool ChatHandler::HandleLookupAccountEmailCommand(char* args)
         return false;
 
     std::string email = emailStr;
-    LoginDatabase.escape_string(email);
 
     // No wildcard in front, cannot use table index
-    LoginDatabase.AsyncPQuery(AccountSearchHandler::HandleAccountLookupResult, GetAccountId(), limit,
-        //      0      1           2         3        4
-        "SELECT `id`, `username`, `last_ip`, 0, `expansion` FROM `account` WHERE `email` LIKE CONCAT('%s','%%')" " LIMIT %u",
-        email.c_str(), limit);
+    PlayerSearchQueryHolder* holder = new PlayerSearchQueryHolder(GetAccountId(), limit);
+    holder->SetSize(1);
+    static SqlStatementID selAccountEmail;
+    SqlStatement accountEmailStmt = LoginDatabase.CreateStatement(selAccountEmail, "SELECT `id`, `username`, `last_ip`, 0, `expansion` FROM `account` WHERE `email` LIKE CONCAT(?, '%%') LIMIT ?");
+    accountEmailStmt.addString(email);
+    accountEmailStmt.addUInt32(limit);
+    holder->SetPreparedQuery(0, accountEmailStmt);
+    LoginDatabase.DelayQueryHolder(static_cast<void (*)(std::unique_ptr<QueryResult>, SqlQueryHolder*)>(&AccountSearchHandler::HandleAccountLookupResult), holder);
 
     return true;
 }
@@ -945,13 +948,19 @@ bool ChatHandler::ShowAccountIpListHelper(char* args, bool onlineonly)
         return false;
 
     std::string ip = ipStr;
-    LoginDatabase.escape_string(ip);
 
-    char const* query = onlineonly
-        ? "SELECT `id`, `username`, `last_ip`, 0, `expansion` FROM `account` WHERE `online` = 1 AND `last_ip` LIKE CONCAT('%s','%%')" " LIMIT %u"
-        : "SELECT `id`, `username`, `last_ip`, 0, `expansion` FROM `account` WHERE                  `last_ip` LIKE CONCAT('%s','%%')" " LIMIT %u";
+    PlayerSearchQueryHolder* holder = new PlayerSearchQueryHolder(GetAccountId(), limit);
+    holder->SetSize(1);
+    static SqlStatementID selAccountIpOnline;
+    static SqlStatementID selAccountIp;
+    SqlStatement ipStmt = onlineonly
+        ? LoginDatabase.CreateStatement(selAccountIpOnline, "SELECT `id`, `username`, `last_ip`, 0, `expansion` FROM `account` WHERE `online` = 1 AND `last_ip` LIKE CONCAT(?, '%%') LIMIT ?")
+        : LoginDatabase.CreateStatement(selAccountIp, "SELECT `id`, `username`, `last_ip`, 0, `expansion` FROM `account` WHERE `last_ip` LIKE CONCAT(?, '%%') LIMIT ?");
+    ipStmt.addString(ip);
+    ipStmt.addUInt32(limit);
 
-    LoginDatabase.AsyncPQuery(AccountSearchHandler::HandleAccountLookupResult, GetAccountId(), limit, query, ip.c_str(), limit);
+    holder->SetPreparedQuery(0, ipStmt);
+    LoginDatabase.DelayQueryHolder(static_cast<void (*)(std::unique_ptr<QueryResult>, SqlQueryHolder*)>(&AccountSearchHandler::HandleAccountLookupResult), holder);
 
     return true;
 }
@@ -980,12 +989,15 @@ bool ChatHandler::HandleLookupAccountNameCommand(char* args)
     if (!AccountMgr::normalizeString(account))
         return false;
 
-    LoginDatabase.escape_string(account);
 
-    LoginDatabase.AsyncPQuery(AccountSearchHandler::HandleAccountLookupResult, GetAccountId(), limit,
-        //       0     1           2         3   4
-        "SELECT `id`, `username`, `last_ip`, 0, `expansion` FROM `account` WHERE `username` LIKE CONCAT('%%','%s','%%')" " LIMIT %u",
-        account.c_str(), limit);
+    PlayerSearchQueryHolder* holder = new PlayerSearchQueryHolder(GetAccountId(), limit);
+    holder->SetSize(1);
+    static SqlStatementID selAccountName;
+    SqlStatement accountNameStmt = LoginDatabase.CreateStatement(selAccountName, "SELECT `id`, `username`, `last_ip`, 0, `expansion` FROM `account` WHERE `username` LIKE CONCAT('%%', ?, '%%') LIMIT ?");
+    accountNameStmt.addString(account);
+    accountNameStmt.addUInt32(limit);
+    holder->SetPreparedQuery(0, accountNameStmt);
+    LoginDatabase.DelayQueryHolder(static_cast<void (*)(std::unique_ptr<QueryResult>, SqlQueryHolder*)>(&AccountSearchHandler::HandleAccountLookupResult), holder);
 
     return true;
 }
@@ -1002,8 +1014,10 @@ bool ChatHandler::HandleLookupPlayerIpCommand(char* args)
 
     std::unique_ptr<QueryResult> result = nullptr;
     std::string ip = ipStr;
-    LoginDatabase.escape_string(ip);
-    result = LoginDatabase.PQuery("SELECT `id`, `username` FROM `account` WHERE `last_ip` LIKE CONCAT('%s','%%')", ip.c_str());
+    static SqlStatementID selPlayerIp;
+    SqlStatement playerIpStmt = LoginDatabase.CreateStatement(selPlayerIp, "SELECT `id`, `username` FROM `account` WHERE `last_ip` LIKE CONCAT(?, '%%')");
+    playerIpStmt.addString(ip);
+    result = playerIpStmt.PQuery();
 
     return LookupPlayerSearchCommand(std::move(result), &limit);
 }
@@ -1022,9 +1036,11 @@ bool ChatHandler::HandleLookupPlayerAccountCommand(char* args)
     if (!AccountMgr::normalizeString(account))
         return false;
 
-    LoginDatabase.escape_string(account);
 
-    std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `id`, `username` FROM `account` WHERE `username` LIKE CONCAT('%s','%%')", account.c_str());
+    static SqlStatementID selPlayerAccount;
+    SqlStatement playerAccountStmt = LoginDatabase.CreateStatement(selPlayerAccount, "SELECT `id`, `username` FROM `account` WHERE `username` LIKE CONCAT(?, '%%')");
+    playerAccountStmt.addString(account);
+    std::unique_ptr<QueryResult> result = playerAccountStmt.PQuery();
 
     return LookupPlayerSearchCommand(std::move(result), &limit);
 }
@@ -1040,9 +1056,11 @@ bool ChatHandler::HandleLookupPlayerEmailCommand(char* args)
         return false;
 
     std::string email = emailStr;
-    LoginDatabase.escape_string(email);
 
-    std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `id`, `username` FROM `account` WHERE `email` LIKE CONCAT('%s','%%')", email.c_str());
+    static SqlStatementID selPlayerEmail;
+    SqlStatement playerEmailStmt = LoginDatabase.CreateStatement(selPlayerEmail, "SELECT `id`, `username` FROM `account` WHERE `email` LIKE CONCAT(?, '%%')");
+    playerEmailStmt.addString(email);
+    std::unique_ptr<QueryResult> result = playerEmailStmt.PQuery();
 
     return LookupPlayerSearchCommand(std::move(result), &limit);
 }
@@ -1059,12 +1077,14 @@ bool ChatHandler::HandleLookupPlayerNameCommand(char* args)
 
     uint32 limit_original = limit;
     std::string name = nameStr;
-    CharacterDatabase.escape_string(name);
 
-    CharacterDatabase.AsyncPQuery(&PlayerSearchHandler::HandlePlayerCharacterLookupResult,
-        GetAccountId(), limit_original,
-        "SELECT `guid`, `name`, `race`, `class`, `level` FROM `characters` WHERE `name` LIKE CONCAT('%%','%s','%%')",
-        name.c_str());
+    PlayerSearchQueryHolder* holder = new PlayerSearchQueryHolder(GetAccountId(), limit_original);
+    holder->SetSize(1);
+    static SqlStatementID selPlayerName;
+    SqlStatement playerNameStmt = CharacterDatabase.CreateStatement(selPlayerName, "SELECT `guid`, `name`, `race`, `class`, `level` FROM `characters` WHERE `name` LIKE CONCAT('%%', ?, '%%')");
+    playerNameStmt.addString(name);
+    holder->SetPreparedQuery(0, playerNameStmt);
+    CharacterDatabase.DelayQueryHolder(static_cast<void (*)(std::unique_ptr<QueryResult>, SqlQueryHolder*)>(&PlayerSearchHandler::HandlePlayerCharacterLookupResult), holder);
 
     return true;
 }
@@ -1092,8 +1112,10 @@ bool ChatHandler::HandleLookupPlayerCharacterCommand(char* args)
                 if (GetAccessLevel() < security || (GetAccessLevel() < SEC_ADMINISTRATOR && security > SEC_PLAYER))
                     return LookupPlayerSearchCommand(nullptr, &limit);
 
-                LoginDatabase.escape_string(ip);
-                result = LoginDatabase.PQuery("SELECT `id`, `username` FROM `account` WHERE `last_ip` = '%s'", ip.c_str());
+                static SqlStatementID selAccountByIp;
+                SqlStatement accountByIpStmt = LoginDatabase.CreateStatement(selAccountByIp, "SELECT `id`, `username` FROM `account` WHERE `last_ip` = ?");
+                accountByIpStmt.addString(ip);
+                result = accountByIpStmt.PQuery();
             }
         }
     }

@@ -637,6 +637,20 @@ void PlayerBotMgr::DeleteBattleBots()
     m_confBattleBotAutoJoin = false;
 }
 
+bool PlayerBotMgr::SetBattleBotSkill(BotSkill skill)
+{
+    bool ok = false;
+    for (auto const& itr : m_bots)
+    {
+        if (BattleBotAI* pAI = dynamic_cast<BattleBotAI*>(itr.second->ai.get()))
+        {
+            pAI->m_personality.Set(skill);
+            ok = true;
+        }
+    }
+    return ok;
+}
+
 bool PlayerBotMgr::ForceAccountConnection(WorldSession* sess)
 {
     if (sess->GetBot())
@@ -2164,6 +2178,55 @@ void ShowBattleBotPathHelper(Map* pMap, BattleBotPath* pPath, uint32 id)
                 pWaypoint->CastSpell(pWaypoint, SPELL_RED_GLOW, true);
         }
     }
+}
+
+// Runs a skill order on one battle bot. Same per-bot shape as ApplyPartyBotSkill.
+bool ApplyBattleBotSkill(Player* pBot, BotSkill skill)
+{
+    if (!pBot->AI() || !pBot->IsAlive())
+        return false;
+
+    if (BattleBotAI* pAI = dynamic_cast<BattleBotAI*>(pBot->AI()))
+    {
+        pAI->m_personality.Set(skill);
+        return true;
+    }
+
+    return false;
+}
+
+bool ChatHandler::HandleBattleBotSkillCommand(char* args)
+{
+    BotSkill const skill = BotPersonality::FromString(args);
+    if (skill == BOT_SKILL_INVALID)
+    {
+        SendSysMessage("Usage: .battlebot skill <casual|normal|sharp>");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    Player* pPlayer = GetSession()->GetPlayer();
+    Player* pTarget = GetSelectedPlayer();
+
+    if (pTarget && (pTarget != pPlayer))
+    {
+        if (ApplyBattleBotSkill(pTarget, skill))
+        {
+            PSendSysMessage("%s now plays %s.", pTarget->GetName(), BotPersonality::ToString(skill));
+            return true;
+        }
+        SendSysMessage("Target is not a battle bot.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (sPlayerBotMgr.SetBattleBotSkill(skill))
+    {
+        PSendSysMessage("All battle bots now play %s.", BotPersonality::ToString(skill));
+        return true;
+    }
+    SendSysMessage("There are no battle bots.");
+    return false;
 }
 
 bool ChatHandler::HandleBattleBotShowPathCommand(char* args)

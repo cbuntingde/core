@@ -291,6 +291,23 @@ Database::DelayQueryHolderUnsafe(void (*method)(std::unique_ptr<QueryResult>, Sq
     cb->threadSafe = false;
     return holder->Execute(cb, this, m_pResultQueue);
 }
+// -- QueryHolder static, no extra callback params --
+inline bool
+Database::DelayQueryHolder(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*), SqlQueryHolder* holder)
+{
+    ASYNC_DELAYHOLDER_BODY(holder)
+    return holder->Execute(new MaNGOS::SQueryCallback<SqlQueryHolder*>(method, std::unique_ptr<QueryResult>(nullptr), holder), this, m_pResultQueue);
+}
+
+inline bool
+Database::DelayQueryHolderUnsafe(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*), SqlQueryHolder* holder)
+{
+    ASYNC_DELAYHOLDER_BODY(holder)
+    MaNGOS::SQueryCallback<SqlQueryHolder*>* cb = new MaNGOS::SQueryCallback<SqlQueryHolder*>(method, std::unique_ptr<QueryResult>(nullptr), holder);
+    cb->threadSafe = false;
+    return holder->Execute(cb, this, m_pResultQueue);
+}
+
 #undef ASYNC_QUERY_BODY
 #undef ASYNC_PQUERY_BODY
 #undef ASYNC_DELAYHOLDER_BODY

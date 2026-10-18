@@ -210,9 +210,14 @@ int Master::Run()
     // set realmbuilds depend on mangosd expected builds, and set server online
     {
         std::string builds = AcceptableClientBuildsListStr();
-        LoginDatabase.escape_string(builds);
+        // `builds` travels as a bound parameter below, never interpolated.
 
-        LoginDatabase.PExecute("UPDATE `realmlist` SET `realmflags` = `realmflags` & ~(%u), `population` = 0, `realmbuilds` = '%s'  WHERE `id` = '%u'", REALM_FLAG_OFFLINE, builds.c_str(), realmID);
+        static SqlStatementID updRealmlist;
+        SqlStatement realmlistStmt = LoginDatabase.CreateStatement(updRealmlist, "UPDATE `realmlist` SET `realmflags` = `realmflags` & ~(?), `population` = 0, `realmbuilds` = ?  WHERE `id` = ?");
+        realmlistStmt.addUInt32(uint32(REALM_FLAG_OFFLINE));
+        realmlistStmt.addString(builds);
+        realmlistStmt.addUInt32(uint32(realmID));
+        realmlistStmt.Execute();
     }
 
     std::unique_ptr<std::thread> cliThread = nullptr;

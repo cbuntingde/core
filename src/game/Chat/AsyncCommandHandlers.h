@@ -99,6 +99,9 @@ class PlayerSearchHandler
 public:
     static void HandlePlayerAccountSearchResult(std::unique_ptr<QueryResult>, SqlQueryHolder *holder, int);
     static void HandlePlayerCharacterLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit);
+    // Holder-taking twin for prepared async lookups: takes the staged result
+    // and forwards to the variant above. The holder must be a PlayerSearchQueryHolder.
+    static void HandlePlayerCharacterLookupResult(std::unique_ptr<QueryResult>, SqlQueryHolder* holder);
     static void ShowPlayerListHelper(std::unique_ptr<QueryResult> result, ChatHandler& chatHandler, uint32& count, uint32 limit, bool title);
 };
 
@@ -106,6 +109,9 @@ class AccountSearchHandler
 {
 public:
     static void HandleAccountLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit);
+    // Holder-taking twin for prepared async lookups: takes the staged result
+    // and forwards to the variant above. The holder must be a PlayerSearchQueryHolder.
+    static void HandleAccountLookupResult(std::unique_ptr<QueryResult>, SqlQueryHolder* holder);
     static void ShowAccountListHelper(std::unique_ptr<QueryResult> result, ChatHandler& chatHandler, uint32& count, uint32 limit, bool title);
 };
 
@@ -115,6 +121,10 @@ public:
     // Handle the initial gold lookup for offline player, and perform the removal
     // @not thread safe, must be called from an async unsafe DB callback
     static void HandleGoldLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 removeAmount);
+    // Holder-taking twin for prepared async lookups: takes the staged result
+    // and forwards to the variant above. The holder must be a PlayerSearchQueryHolder
+    // carrying the remove amount in its limit slot.
+    static void HandleGoldLookupResult(std::unique_ptr<QueryResult>, SqlQueryHolder* holder);
 };
 
 typedef std::map<uint32, std::pair<uint32, std::string>> PlayerSearchAccountMap;

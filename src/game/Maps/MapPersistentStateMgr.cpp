@@ -802,14 +802,17 @@ void MapPersistentStateManager::_DelHelper(DatabaseType &db, char const* fields,
         do
         {
             Field* fields = result->Fetch();
+            // Row values travel as bound parameters; only the (internal, constant) table/column
+            // identifiers are interpolated, as identifiers cannot be bound.
             std::ostringstream ss;
+            ss << "DELETE FROM " << table << " WHERE ";
             for (size_t i = 0; i < fieldTokens.size(); i++)
-            {
-                std::string fieldValue = fields[i].GetCppString();
-                db.escape_string(fieldValue);
-                ss << (i != 0 ? " AND " : "") << fieldTokens[i] << " = '" << fieldValue << "'";
-            }
-            db.PExecute("DELETE FROM %s WHERE %s", table, ss.str().c_str());
+                ss << (i != 0 ? " AND " : "") << fieldTokens[i] << " = ?";
+            SqlStatementID delId; // local id: statement text varies per caller, a static id would cache the first text
+            SqlStatement delStmt = db.CreateStatement(delId, ss.str().c_str());
+            for (size_t i = 0; i < fieldTokens.size(); i++)
+                delStmt.addString(fields[i].GetCppString());
+            delStmt.Execute();
         }
         while (result->NextRow());
     }

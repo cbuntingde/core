@@ -21,6 +21,7 @@ local CMD_PARTYBOT_STAY = ".partybot stay";
 local CMD_PARTYBOT_ASSIST = ".partybot assist";
 local CMD_PARTYBOT_SKILL = ".partybot skill ";
 local CMD_BATTLEBOT_ADD = ".battlebot add ";
+local CMD_BATTLEBOT_SKILL = ".battlebot skill ";
 
 local SHOW = 0;
 
@@ -128,6 +129,10 @@ function Brackets()
         ranbotlevel = math.random(10, 19);
     end
     return ranbotlevel;
+end
+
+function SubBattleBotSkill(arg1)
+    SendChatMessage(CMD_BATTLEBOT_SKILL .. arg1);
 end
 
 function SubBattleBotAdd(self, arg1, arg2)
