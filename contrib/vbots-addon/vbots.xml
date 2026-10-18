@@ -1,0 +1,976 @@
+<Ui xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.blizzard.com/wow/ui/">
+	<Script file="Frame.lua" />
+
+	<Frame name="vbotsButtonFrame" parent="Minimap" enableMouse="true" hidden="false" frameStrata="LOW">
+		<Size>
+			<AbsDimension x="32" y="32"/>
+		</Size>
+		<Anchors>
+			<Anchor point="TOPLEFT" relativeTo="Minimap" relativePoint="RIGHT">
+				<Offset>
+					<AbsDimension x="2" y="0"/>
+				</Offset>
+			</Anchor>
+		</Anchors>
+		<Frames>
+			<Button name="AtlasButton">
+				<Size>
+					<AbsDimension x="32" y="32"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="0" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<NormalTexture file="Interface\AddOns\vbots\img\vmButton"/>
+				<PushedTexture file="Interface\AddOns\vbots\img\vmButton-pushed"/>
+				<HighlightTexture alphaMode="ADD" file="Interface\Minimap\UI-Minimap-ZoomButton-Highlight"/>
+				<Scripts>
+					<OnClick>
+						vbotsButtonFrame_OnClick();
+					</OnClick>
+				</Scripts>
+			</Button>
+		</Frames>
+	</Frame>
+
+	<!-- Compact bot panel: one column of labeled sections. All buttons are
+	     22px tall; rows step 26px; columns step to fit a 280px frame. -->
+	<Frame name="vbotsFrame" toplevel="true" movable="true" enableMouse="true" parent="UIParent" hidden="true">
+		<Size x="280" y="610"/>
+		<Anchors>
+			<Anchor point="CENTER"/>
+		</Anchors>
+		<Scripts>
+			<OnLoad>
+				vbotsFrame_OnLoad();
+			</OnLoad>
+			<OnDragStart>
+				vbotsFrame_OnDragStart(arg1);
+			</OnDragStart>
+			<OnDragStop>
+				vbotsFrame_OnDragStop();
+			</OnDragStop>
+			<OnShow>
+				vbotsFrame_OnShow();
+			</OnShow>
+			<OnHide>
+				vbotsFrame_OnHide();
+			</OnHide>
+		</Scripts>
+		<Backdrop bgFile="Interface\TutorialFrame\TutorialFrameBackground" edgeFile="Interface\Tooltips\UI-Tooltip-Border" tile="true">
+			<EdgeSize>
+				<AbsDimension x="16" y="16"/>
+			</EdgeSize>
+			<TileSize>
+				<AbsDimension x="16" y="16"/>
+			</TileSize>
+			<BackgroundInsets>
+				<AbsDimension x="5" y="5"/>
+			</BackgroundInsets>
+		</Backdrop>
+		<Layers>
+			<Layer level="OVERLAY">
+				<FontString name="vbotsTitle" inherits="GameFontNormal" text="vBots">
+					<Size x="120" y="16"/>
+					<Anchors>
+						<Anchor point="TOP">
+							<Offset>
+								<AbsDimension x="0" y="-8"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsPartyHeader" inherits="GameFontNormalSmall" text="Party">
+					<Size x="256" y="14"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="12" y="-28"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsAddClassHeader" inherits="GameFontNormalSmall" text="Add by class">
+					<Size x="256" y="14"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="12" y="-72"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsAddRoleHeader" inherits="GameFontNormalSmall" text="Add by role">
+					<Size x="256" y="14"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="12" y="-168"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsSetRoleHeader" inherits="GameFontNormalSmall" text="Set role (selected bot)">
+					<Size x="256" y="14"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="12" y="-212"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsCCHeader" inherits="GameFontNormalSmall" text="CC mark (default Moon)">
+					<Size x="256" y="14"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="12" y="-256"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsFocusHeader" inherits="GameFontNormalSmall" text="Focus mark (default Skull)">
+					<Size x="256" y="14"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="12" y="-326"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsBattleHeader" inherits="GameFontNormalSmall" text="Battle bots">
+					<Size x="256" y="14"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="12" y="-396"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsWSLabel" inherits="GameFontNormalSmall" text="Warsong">
+					<Size x="76" y="22"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="8" y="-412"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsABLabel" inherits="GameFontNormalSmall" text="Arathi">
+					<Size x="76" y="22"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="8" y="-438"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsAVLabel" inherits="GameFontNormalSmall" text="Alterac">
+					<Size x="76" y="22"/>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="8" y="-464"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="vbotsControlHeader" inherits="GameFontNormalSmall" text="Control (selected or group)">
+				<Size x="256" y="14"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="12" y="-490"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</FontString>
+			<FontString name="vbotsSkillHeader" inherits="GameFontNormalSmall" text="Skill (selected or group)">
+				<Size x="256" y="14"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="12" y="-558"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</FontString>
+		</Layer>
+		</Layers>
+		<Frames>
+			<Button name="vbotsClose" inherits="UIPanelButtonTemplate" text="Close">
+				<Size x="56" y="20"/>
+				<Anchors>
+					<Anchor point="TOPRIGHT">
+						<Offset>
+							<AbsDimension x="-8" y="-6"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						CloseFrame();
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotClone" inherits="UIPanelButtonTemplate" text="Clone">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-44"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotClone(self);
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotRemove" inherits="UIPanelButtonTemplate" text="Remove">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="74" y="-44"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotClone(self);
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotDie" inherits="UIPanelButtonTemplate" text="Die">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="140" y="-44"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotDie();
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotRevive" inherits="UIPanelButtonTemplate" text="Revive">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="206" y="-44"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotRevive();
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddWarrior" inherits="UIPanelButtonTemplate" text="Warrior">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-88"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "warrior");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddPaladin" inherits="UIPanelButtonTemplate" text="Paladin">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="96" y="-88"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "paladin");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddHunter" inherits="UIPanelButtonTemplate" text="Hunter">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="184" y="-88"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "hunter");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddRogue" inherits="UIPanelButtonTemplate" text="Rogue">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-114"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "rogue");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddPriest" inherits="UIPanelButtonTemplate" text="Priest">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="96" y="-114"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "priest");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddShaman" inherits="UIPanelButtonTemplate" text="Shaman">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="184" y="-114"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "shaman");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddMage" inherits="UIPanelButtonTemplate" text="Mage">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-140"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "mage");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddWarlock" inherits="UIPanelButtonTemplate" text="Warlock">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="96" y="-140"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "warlock");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddDruid" inherits="UIPanelButtonTemplate" text="Druid">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="184" y="-140"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "druid");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddTank" inherits="UIPanelButtonTemplate" text="Tank">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-184"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "tank");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddHealer" inherits="UIPanelButtonTemplate" text="Healer">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="96" y="-184"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "healer");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAddDPS" inherits="UIPanelButtonTemplate" text="DPS">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="184" y="-184"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAdd(self, "dps");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotSetTank" inherits="UIPanelButtonTemplate" text="Tank">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-228"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetRole("tank");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotSetHealer" inherits="UIPanelButtonTemplate" text="Healer">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="74" y="-228"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetRole("healer");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotSetMDPS" inherits="UIPanelButtonTemplate" text="M.DPS">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="140" y="-228"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetRole("meleedps");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotSetRDPS" inherits="UIPanelButtonTemplate" text="R.DPS">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="206" y="-228"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetRole("rangedps");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotCCSkull" inherits="UIPanelButtonTemplate" text="Skull">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-272"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetCCMark("skull");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotCCCross" inherits="UIPanelButtonTemplate" text="Cross">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="74" y="-272"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetCCMark("cross");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotCCSquare" inherits="UIPanelButtonTemplate" text="Square">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="140" y="-272"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetCCMark("square");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotCCMoon" inherits="UIPanelButtonTemplate" text="Moon">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="206" y="-272"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetCCMark("moon");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotCCCircle" inherits="UIPanelButtonTemplate" text="Circle">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-298"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetCCMark("circle");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotCCDiamond" inherits="UIPanelButtonTemplate" text="Diamond">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="74" y="-298"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetCCMark("diamond");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotCCTriangle" inherits="UIPanelButtonTemplate" text="Triangle">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="140" y="-298"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetCCMark("triangle");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotCCStar" inherits="UIPanelButtonTemplate" text="Star">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="206" y="-298"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetCCMark("star");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFocusSkull" inherits="UIPanelButtonTemplate" text="Skull">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-342"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetFocusMark("skull");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFocusCross" inherits="UIPanelButtonTemplate" text="Cross">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="74" y="-342"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetFocusMark("cross");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFocusSquare" inherits="UIPanelButtonTemplate" text="Square">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="140" y="-342"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetFocusMark("square");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFocusMoon" inherits="UIPanelButtonTemplate" text="Moon">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="206" y="-342"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetFocusMark("moon");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFocusCircle" inherits="UIPanelButtonTemplate" text="Circle">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-368"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetFocusMark("circle");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFocusDiamond" inherits="UIPanelButtonTemplate" text="Diamond">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="74" y="-368"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetFocusMark("diamond");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFocusTriangle" inherits="UIPanelButtonTemplate" text="Triangle">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="140" y="-368"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetFocusMark("triangle");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFocusStar" inherits="UIPanelButtonTemplate" text="Star">
+				<Size x="62" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="206" y="-368"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSetFocusMark("star");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotAddWarsongHorde" inherits="UIPanelButtonTemplate" text="Horde">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="88" y="-412"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotAdd(self, "warsong", "horde");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotAddWarsongAlliance" inherits="UIPanelButtonTemplate" text="Alliance">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="176" y="-412"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotAdd(self, "warsong", "alliance");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotAddArathiHorde" inherits="UIPanelButtonTemplate" text="Horde">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="88" y="-438"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotAdd(self, "arathi", "horde");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotAddArathiAlliance" inherits="UIPanelButtonTemplate" text="Alliance">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="176" y="-438"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotAdd(self, "arathi", "alliance");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotAddAlteracHorde" inherits="UIPanelButtonTemplate" text="Horde">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="88" y="-464"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotAdd(self, "alterac", "horde");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="BattleBotAddAlteracAlliance" inherits="UIPanelButtonTemplate" text="Alliance">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="176" y="-464"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubBattleBotAdd(self, "alterac", "alliance");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFollowClose" inherits="UIPanelButtonTemplate" text="Follow Close">
+				<Size x="128" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-506"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotFollow("close");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotFollowFar" inherits="UIPanelButtonTemplate" text="Follow Far">
+				<Size x="128" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="144" y="-506"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotFollow("far");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotHold" inherits="UIPanelButtonTemplate" text="Hold">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-532"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotHold();
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotStay" inherits="UIPanelButtonTemplate" text="Stay">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="96" y="-532"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotStay();
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotAssist" inherits="UIPanelButtonTemplate" text="Assist">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="184" y="-532"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotAssist();
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotSkillCasual" inherits="UIPanelButtonTemplate" text="Casual">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-574"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSkill("casual");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotSkillNormal" inherits="UIPanelButtonTemplate" text="Normal">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="96" y="-574"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSkill("normal");
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="PartyBotSkillSharp" inherits="UIPanelButtonTemplate" text="Sharp">
+				<Size x="84" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="184" y="-574"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotSkill("sharp");
+					</OnClick>
+				</Scripts>
+			</Button>
+		</Frames>
+	</Frame>
+</Ui>
