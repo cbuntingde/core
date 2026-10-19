@@ -292,15 +292,14 @@ void Database::escape_string(std::string& str)
         return;
 
     int bufSize = str.size() * 2 + 1;
-    char* buf = new char[bufSize + 1];
+    auto buf = std::make_unique<char[]>(bufSize + 1);
     // Escape results are identical for every connection, but mysql_real_escape_string
     // operates on a live MYSQL handle that other threads use concurrently, so the
     // connection must be locked for the duration of the call.
     SqlConnection::Lock guard(m_pQueryConnections[0]);
-    m_pQueryConnections[0]->escape_string(buf, str.c_str(), str.size());
+    m_pQueryConnections[0]->escape_string(buf.get(), str.c_str(), str.size());
     buf[bufSize] = 0;
-    str = buf;
-    delete[] buf;
+    str = buf.get();
 }
 
 SqlConnection* Database::getQueryConnection()
