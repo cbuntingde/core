@@ -26,12 +26,24 @@ what players type in game, and automated build and test checks.
   while others attack, escort the carrier, chase the thief, or
   recover a dropped flag.
 - In Arathi Basin, each bot takes and holds an assigned banner. In
-  Alterac Valley, some defend while the rest attack.
+  Alterac Valley, some defend while the rest attack. A Warsong match
+  can start with just you: queue yourself with three allied bots
+  against four opponents.
 - Ranged fighters and healers keep their distance from each other
   instead of piling up, and bots focus the marked target when there
   is one.
 - The download includes an optional add-on with the clickable panel;
-  its own readme explains how to switch it on.
+  its own readme explains how to switch it on. One button assembles a
+  full dungeon group (tank, healer, damage) at your level. Your last
+  group is remembered, so logging back in offers it straight back.
+
+## Solo-friendly world
+
+- The auction house can stock everyday goods (bags, ammunition, food,
+  reagents, crafting basics) at fair prices, so it stays useful even
+  with no other players online. The server owner switches this on.
+- Two helper orders look after the whole group at once: mending
+  everyone's gear and bringing the fallen back after a wipe.
 
 ## Safer server
 

@@ -3142,6 +3142,14 @@ CharDelete.KeepDays = 30
 #    AHBot.itemcount
 #        How many listings to put into the auction house at most.
 #        The AH bot will add items until this number of listings is reached in the auction house (this includes potential player listings).
+#
+#    Solo preset (lone server, no other players online)
+#        The world database ships starter stock (bags, ammunition, food,
+#        class reagents, cloth, crafting basics) priced near vendor levels.
+#        To open a stocked auction house for solo play, set:
+#        AHBot.Enable = 1
+#        AHBot.itemcount = 50
+#        (Neutral houses by default; use AHBot.ah.fid for faction houses.)
 #        Default: 50
 #
 ###################################################################################################################

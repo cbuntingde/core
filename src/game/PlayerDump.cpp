@@ -205,6 +205,10 @@ static bool changetokGuid(std::string &str, int n, std::map<uint32, uint32>& gui
     return changetoknth(str, n, chritem, false, nonzero);
 }
 
+// Builds SQL *text* for character-dump files. LoadDump executes each line
+// verbatim, so quoting here is load-bearing and stays a single choke point:
+// bound parameters cannot express a .sql file. Do not "migrate" this to
+// SqlStatement; the escape_string gate allowlists this writer by design.
 static std::string CreateDumpString(char const* tableName, const std::unique_ptr<QueryResult>& result)
 {
     if (!tableName || !result)

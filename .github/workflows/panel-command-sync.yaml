@@ -1,0 +1,24 @@
+# Panel/server command sync (bot panel drift gate).
+# The vbots addon panel sends chat commands that must exist in the server
+# command tables; a renamed or removed command breaks the panel silently.
+name: Panel command sync
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    branches: [ development ]
+
+jobs:
+  panel-command-sync:
+    name: Panel commands exist server-side
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Fail on panel/server command drift
+        shell: bash
+        run: python3 contrib/check-panel-commands.py

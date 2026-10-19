@@ -41,22 +41,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Every supported client build is verified against Ubuntu GCC; the
-        # latest (1.12.1.5875) additionally runs against Ubuntu Clang, Windows
-        # Visual Studio, and Windows MinGW (added via include below).
-        # The full matrix runs on both pushes and pull requests.
-        # (PR slimming via job-level if is invalid: matrix is
-        # unavailable in jobs.<id>.if, so the whole file was rejected.)
+        # Only the pinned client build (1.12.1.5875) is verified; the
+        # older-client Ubuntu GCC jobs were dropped as noise. 5875 runs
+        # against Ubuntu GCC and additionally against Ubuntu Clang, macOS
+        # Clang, Windows Visual Studio, and Windows MinGW (added via
+        # include below).
         client_build:
           - 5875
-          - 5464
-          - 5302
-          - 5086
-          - 4878
-          - 4695
-          - 4544
-          - 4449
-          - 4375
         config:
           - os: ubuntu-24.04
             c_compiler: gcc

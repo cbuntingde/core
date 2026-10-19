@@ -33,13 +33,43 @@
 					</OnClick>
 				</Scripts>
 			</Button>
+			<Button name="DungeonPartyAssemble" inherits="UIPanelButtonTemplate" text="Assemble Party">
+				<Size x="124" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="8" y="-652"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubDungeonParty();
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="DungeonPartyLast" inherits="UIPanelButtonTemplate" text="Last Party">
+				<Size x="124" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="140" y="-652"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotLoadLast();
+					</OnClick>
+				</Scripts>
+			</Button>
 		</Frames>
 	</Frame>
 
 	<!-- Compact bot panel: one column of labeled sections. All buttons are
 	     22px tall; rows step 26px; columns step to fit a 280px frame. -->
 	<Frame name="vbotsFrame" toplevel="true" movable="true" enableMouse="true" parent="UIParent" hidden="true">
-		<Size x="280" y="640"/>
+		<Size x="280" y="690"/>
 		<Anchors>
 			<Anchor point="CENTER"/>
 		</Anchors>
@@ -209,6 +239,16 @@
 					<Anchor point="TOPLEFT">
 						<Offset>
 							<AbsDimension x="12" y="-584"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</FontString>
+			<FontString name="vbotsDungeonHeader" inherits="GameFontNormalSmall" text="Dungeon party">
+				<Size x="256" y="14"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="12" y="-626"/>
 						</Offset>
 					</Anchor>
 				</Anchors>

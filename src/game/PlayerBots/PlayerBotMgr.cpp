@@ -185,8 +185,16 @@ void PlayerBotMgr::OnPlayerInWorld(Player* player)
         player->SetAI(e->ai.get());
         e->ai->SetPlayer(player);
         e->ai->OnPlayerLogin();
+        return;
     }
+
+    std::unique_ptr<QueryResult> roster(CharacterDatabase.PQuery("SELECT COUNT(*) FROM `partybot_roster` WHERE `account` = '%u'", player->GetSession()->GetAccountId()));
+    if (roster && roster->Fetch()[0].GetUInt32() > 0)
+        ChatHandler(player).SendSysMessage("Your last party is saved - bring it back with .partybot loadlast.");
 }
+
+static void SavePartyRoster(Player* pLeader);
+static bool PartyBotAddBySpec(ChatHandler* handler, Player* pLeader, Player* pClone, CombatBotRoles botRole, uint8 botRace, uint8 botClass, uint32 botLevel);
 
 void PlayerBotMgr::Update(uint32 diff)
 {
@@ -246,6 +254,14 @@ void PlayerBotMgr::Update(uint32 diff)
                         // don't leave permanent corpse
                         iter->second->ai->me->ResurrectPlayer(1.0f);
                         iter->second->ai->me->SpawnCorpseBones();
+                    }
+                    if (iter->second->ai)
+                    {
+                        if (PartyBotAI* pBotAI = dynamic_cast<PartyBotAI*>(iter->second->ai.get()))
+                        {
+                            if (Player* pLeader = pBotAI->GetPartyLeader())
+                                SavePartyRoster(pLeader);
+                        }
                     }
                     iter->second->ai->me->RemoveFromGroup();
                 }
@@ -875,6 +891,49 @@ bool ChatHandler::PartyBotAddRequirementCheck(Player const* pPlayer, Player cons
     return true;
 }
 
+static void SavePartyRoster(Player* pLeader)
+{
+    uint32 accountId = pLeader->GetSession()->GetAccountId();
+    CharacterDatabase.PExecute("DELETE FROM `partybot_roster` WHERE `account` = '%u'", accountId);
+
+    if (Group* pGroup = pLeader->GetGroup())
+    {
+        uint32 slot = 0;
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            Player* pMember = itr->getSource();
+            if (!pMember || pMember == pLeader || !pMember->IsBot())
+                continue;
+            uint8 botRole = ROLE_INVALID;
+            if (pMember->AI())
+            {
+                if (PartyBotAI* pBotAI = dynamic_cast<PartyBotAI*>(pMember->AI()))
+                    botRole = static_cast<uint8>(pBotAI->GetRole());
+            }
+            CharacterDatabase.PExecute("INSERT INTO `partybot_roster` (`account`, `slot`, `race`, `class`, `role`, `level`) VALUES ('%u', '%u', '%u', '%u', '%u', '%u')",
+                accountId, slot++, pMember->GetRace(), pMember->GetClass(), botRole, pMember->GetLevel());
+        }
+    }
+}
+
+static bool PartyBotAddBySpec(ChatHandler* handler, Player* pLeader, Player* pClone, CombatBotRoles botRole, uint8 botRace, uint8 botClass, uint32 botLevel)
+{
+    float x, y, z;
+    pLeader->GetNearPoint(pLeader, x, y, z, 0, 5.0f, frand(0.0f, 6.0f));
+
+    PartyBotAI* ai = new PartyBotAI(pLeader, pClone, botRole, botRace, botClass, botLevel, pLeader->GetMapId(), pLeader->GetMap()->GetInstanceId(), x, y, z, pLeader->GetOrientation());
+    if (sPlayerBotMgr.AddBot(ai))
+    {
+        handler->SendSysMessage("New party bot added.");
+        SavePartyRoster(pLeader);
+        return true;
+    }
+
+    delete ai;
+    handler->SendSysMessage("Error spawning bot.");
+    return false;
+}
+
 bool ChatHandler::HandlePartyBotAddCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();
@@ -960,16 +1019,8 @@ bool ChatHandler::HandlePartyBotAddCommand(char* args)
         return false;
     }
 
-    float x, y, z;
-    pPlayer->GetNearPoint(pPlayer, x, y, z, 0, 5.0f, frand(0.0f, 6.0f));
-
-    PartyBotAI* ai = new PartyBotAI(pPlayer, nullptr, botRole, botRace, botClass, botLevel, pPlayer->GetMapId(), pPlayer->GetMap()->GetInstanceId(), x, y, z, pPlayer->GetOrientation());
-    if (sPlayerBotMgr.AddBot(ai))
-        SendSysMessage("New party bot added.");
-    else
+    if (!PartyBotAddBySpec(this, pPlayer, nullptr, botRole, botRace, botClass, botLevel))
     {
-        delete ai;
-        SendSysMessage("Error spawning bot.");
         SetSentErrorMessage(true);
         return false;
     }
@@ -1000,16 +1051,8 @@ bool ChatHandler::HandlePartyBotCloneCommand(char* args)
     uint8 botRace = pTarget->GetRace();
     uint8 botClass = pTarget->GetClass();
 
-    float x, y, z;
-    pPlayer->GetNearPoint(pPlayer, x, y, z, 0, 5.0f, frand(0.0f, 6.0f));
-
-    PartyBotAI* ai = new PartyBotAI(pPlayer, pTarget, ROLE_INVALID, botRace, botClass, pPlayer->GetLevel(), pPlayer->GetMapId(), pPlayer->GetMap()->GetInstanceId(), x, y, z, pPlayer->GetOrientation());
-    if (sPlayerBotMgr.AddBot(ai))
-        SendSysMessage("New party bot added.");
-    else
+    if (!PartyBotAddBySpec(this, pPlayer, pTarget, ROLE_INVALID, botRace, botClass, pPlayer->GetLevel()))
     {
-        delete ai;
-        SendSysMessage("Error spawning bot.");
         SetSentErrorMessage(true);
         return false;
     }
@@ -1059,7 +1102,52 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
         return false;
     }
 
+    SavePartyRoster(pPlayer);
     PSendSysMessage("Loading %s as party bot.", name.c_str());
+    return true;
+}
+
+bool ChatHandler::HandlePartyBotLoadLastCommand(char* /*args*/)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (!PartyBotAddRequirementCheck(pPlayer, nullptr))
+    {
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 accountId = GetSession()->GetAccountId();
+    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT `race`, `class`, `role`, `level` FROM `partybot_roster` WHERE `account` = '%u' ORDER BY `slot`", accountId));
+    if (!result)
+    {
+        SendSysMessage("No saved party.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 restored = 0;
+    do
+    {
+        Field* fields = result->Fetch();
+        uint8 botRace = fields[0].GetUInt8();
+        uint8 botClass = fields[1].GetUInt8();
+        uint32 roleValue = fields[2].GetUInt32();
+        CombatBotRoles botRole = roleValue <= ROLE_HEALER ? CombatBotRoles(roleValue) : ROLE_INVALID;
+        uint32 botLevel = fields[3].GetUInt32();
+        if (PartyBotAddBySpec(this, pPlayer, nullptr, botRole, botRace, botClass, botLevel))
+            ++restored;
+    } while (result->NextRow());
+
+    if (restored == 0)
+    {
+        SendSysMessage("No saved party members could be restored.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+    PSendSysMessage("%u party bots restored.", restored);
     return true;
 }
 
@@ -2070,6 +2158,64 @@ bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
     }
 
     SendSysMessage("Target is not a party bot.");
+    SetSentErrorMessage(true);
+    return false;
+}
+
+bool ChatHandler::HandleSoloRepairCommand(char* /*args*/)
+{
+    Player* pPlayer = GetSession()->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (Group* pGroup = pPlayer->GetGroup())
+    {
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            if (Player* pMember = itr->getSource())
+                pMember->DurabilityRepairAll(false, 0);
+        }
+        SendSysMessage("All party gear repaired.");
+        return true;
+    }
+
+    pPlayer->DurabilityRepairAll(false, 0);
+    SendSysMessage("Your gear is repaired.");
+    return true;
+}
+
+bool ChatHandler::HandleSoloReviveCommand(char* /*args*/)
+{
+    Player* pPlayer = GetSession()->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (Group* pGroup = pPlayer->GetGroup())
+    {
+        uint32 revived = 0;
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            if (Player* pMember = itr->getSource())
+            {
+                if (pMember->IsDead())
+                {
+                    pMember->ResurrectPlayer(0.5f);
+                    pMember->SpawnCorpseBones();
+                    ++revived;
+                }
+            }
+        }
+        if (revived > 0)
+        {
+            PSendSysMessage("%u party members revived.", revived);
+            return true;
+        }
+        SendSysMessage("Nobody in the party needs reviving.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    SendSysMessage("You are not in a group.");
     SetSentErrorMessage(true);
     return false;
 }
