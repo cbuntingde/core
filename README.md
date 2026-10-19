@@ -26,7 +26,9 @@ what players type in game, and automated build and test checks.
   while others attack, escort the carrier, chase the thief, or
   recover a dropped flag.
 - In Arathi Basin, each bot takes and holds an assigned banner. In
-  Alterac Valley, some defend while the rest attack.
+  Alterac Valley, some defend while the rest attack. A Warsong match
+  can start with just you: queue yourself with three allied bots
+  against four opponents.
 - Ranged fighters and healers keep their distance from each other
   instead of piling up, and bots focus the marked target when there
   is one.
