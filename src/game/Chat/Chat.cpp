@@ -120,6 +120,13 @@ ChatCommand * ChatHandler::getCommandTable()
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 
+    static ChatCommand soloCommandTable[] =
+    {
+        { "repair",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandleSoloRepairCommand,         "", nullptr },
+        { "revive",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandleSoloReviveCommand,         "", nullptr },
+        { nullptr,      0,                      false, nullptr,                                        "", nullptr },
+    };
+
     static ChatCommand battleBotAddCommandTable[] =
     {
         { "alterac",    SEC_ADMINISTRATOR,      true, &ChatHandler::HandleBattleBotAddAlteracCommand, "", nullptr },
@@ -1225,6 +1232,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "bot",            SEC_ADMINISTRATOR,  true, nullptr,                              "Manage bots", botCommandTable      },
         { "ahbot",          SEC_ADMINISTRATOR,  true, nullptr,                            "Manage AH bot", ahbotCommandTable    },
         { "partybot",       SEC_ADMINISTRATOR,  false, nullptr,                       "Manage party bots", partyBotCommandTable },
+        { "solo",           SEC_ADMINISTRATOR,  false, nullptr,                       "Solo-play helpers", soloCommandTable },
         { "battlebot",      SEC_ADMINISTRATOR,  true, nullptr,                      "Manage battle bots", battleBotCommandTable},
         { "world",          SEC_ADMINISTRATOR,  false, nullptr,                                        "", worldCommandTable    },
         { "possess",        SEC_GAMEMASTER,     false, &ChatHandler::HandlePossessCommand,             "", nullptr              },

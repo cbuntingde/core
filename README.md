@@ -39,6 +39,8 @@ what players type in game, and automated build and test checks.
 - The auction house can stock everyday goods (bags, ammunition, food,
   reagents, crafting basics) at fair prices, so it stays useful even
   with no other players online. The server owner switches this on.
+- Two helper orders look after the whole group at once: mending
+  everyone's gear and bringing the fallen back after a wipe.
 
 ## Safer server
 

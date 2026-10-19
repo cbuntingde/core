@@ -2074,6 +2074,64 @@ bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
     return false;
 }
 
+bool ChatHandler::HandleSoloRepairCommand(char* /*args*/)
+{
+    Player* pPlayer = GetSession()->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (Group* pGroup = pPlayer->GetGroup())
+    {
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            if (Player* pMember = itr->getSource())
+                pMember->DurabilityRepairAll(false, 0);
+        }
+        SendSysMessage("All party gear repaired.");
+        return true;
+    }
+
+    pPlayer->DurabilityRepairAll(false, 0);
+    SendSysMessage("Your gear is repaired.");
+    return true;
+}
+
+bool ChatHandler::HandleSoloReviveCommand(char* /*args*/)
+{
+    Player* pPlayer = GetSession()->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (Group* pGroup = pPlayer->GetGroup())
+    {
+        uint32 revived = 0;
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            if (Player* pMember = itr->getSource())
+            {
+                if (pMember->IsDead())
+                {
+                    pMember->ResurrectPlayer(0.5f);
+                    pMember->SpawnCorpseBones();
+                    ++revived;
+                }
+            }
+        }
+        if (revived > 0)
+        {
+            PSendSysMessage("%u party members revived.", revived);
+            return true;
+        }
+        SendSysMessage("Nobody in the party needs reviving.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    SendSysMessage("You are not in a group.");
+    SetSentErrorMessage(true);
+    return false;
+}
+
 bool ChatHandler::HandleBattleBotAddAlteracCommand(char* args)
 {
     return HandleBattleBotAddCommand(args, BATTLEGROUND_QUEUE_AV);
