@@ -112,6 +112,13 @@ function SubPartyBotSetFocusMark(arg1)
     SendChatMessage(CMD_PARTYBOT_FOCUSMARK .. arg1);
 end
 
+function SubDungeonParty()
+    local ranbotlevel = UnitLevel("player");
+    SendChatMessage(CMD_PARTYBOT_ADD .. "tank " .. ranbotlevel);
+    SendChatMessage(CMD_PARTYBOT_ADD .. "healer " .. ranbotlevel);
+    SendChatMessage(CMD_PARTYBOT_ADD .. "dps " .. ranbotlevel);
+end
+
 function Brackets()
     local ranbotlevel;
     local PlayerLevel = UnitLevel("player");
