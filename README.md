@@ -33,6 +33,12 @@ what players type in game, and automated build and test checks.
 - The download includes an optional add-on with the clickable panel;
   its own readme explains how to switch it on.
 
+## Solo-friendly world
+
+- The auction house can stock everyday goods (bags, ammunition, food,
+  reagents, crafting basics) at fair prices, so it stays useful even
+  with no other players online. The server owner switches this on.
+
 ## Safer server
 
 - The secure connection to game clients loads only from its proper
