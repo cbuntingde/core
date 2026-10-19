@@ -34,7 +34,7 @@
 				</Scripts>
 			</Button>
 			<Button name="DungeonPartyAssemble" inherits="UIPanelButtonTemplate" text="Assemble Party">
-				<Size x="260" y="22"/>
+				<Size x="124" y="22"/>
 				<Anchors>
 					<Anchor point="TOPLEFT">
 						<Offset>
@@ -45,6 +45,21 @@
 				<Scripts>
 					<OnClick>
 						SubDungeonParty();
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="DungeonPartyLast" inherits="UIPanelButtonTemplate" text="Last Party">
+				<Size x="124" y="22"/>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="140" y="-652"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SubPartyBotLoadLast();
 					</OnClick>
 				</Scripts>
 			</Button>

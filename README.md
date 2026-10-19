@@ -32,7 +32,8 @@ what players type in game, and automated build and test checks.
   is one.
 - The download includes an optional add-on with the clickable panel;
   its own readme explains how to switch it on. One button assembles a
-  full dungeon group (tank, healer, damage) at your level.
+  full dungeon group (tank, healer, damage) at your level. Your last
+  group is remembered, so logging back in offers it straight back.
 
 ## Solo-friendly world
 

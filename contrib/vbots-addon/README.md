@@ -15,7 +15,8 @@ You need an admin game account: all bot commands require it.
 - **Add by class / role** — summon a party bot of one class, or ask for a
   Tank, Healer, or DPS and let the server pick.
 - **Dungeon party** — one click summons a Tank, a Healer, and a DPS at your
-  level, ready to head into a dungeon with you.
+  level, ready to head into a dungeon with you. Last Party brings back
+  the group you had before you logged out.
 - **Set role** — change the selected bot's job (Tank, Healer, melee or
   ranged damage).
 - **CC / Focus mark** — put a raid mark on your target telling bots what

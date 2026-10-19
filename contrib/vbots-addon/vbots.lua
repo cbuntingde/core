@@ -16,6 +16,7 @@ local CMD_PARTYBOT_SETROLE = ".partybot setrole ";
 local CMD_PARTYBOT_CCMARK = ".partybot ccmark ";
 local CMD_PARTYBOT_FOCUSMARK = ".partybot focusmark ";
 local CMD_PARTYBOT_FOLLOW = ".partybot follow ";
+local CMD_PARTYBOT_LOADLAST = ".partybot loadlast";
 local CMD_PARTYBOT_HOLD = ".partybot hold";
 local CMD_PARTYBOT_STAY = ".partybot stay";
 local CMD_PARTYBOT_ASSIST = ".partybot assist";
@@ -110,6 +111,10 @@ end
 
 function SubPartyBotSetFocusMark(arg1)
     SendChatMessage(CMD_PARTYBOT_FOCUSMARK .. arg1);
+end
+
+function SubPartyBotLoadLast()
+    SendChatMessage(CMD_PARTYBOT_LOADLAST);
 end
 
 function SubDungeonParty()
