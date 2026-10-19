@@ -8,9 +8,10 @@ Server side: the ChatCommand tables in src/game/Chat/Chat.cpp
 (partyBotCommandTable, battleBotCommandTable, battleBotAddCommandTable,
 and the top-level .die / .revive entries).
 
-The addon is untracked, so CI checkouts never contain it: when the lua
-file is absent the check skips (exit 0) instead of failing. Run locally
-after any change that adds, renames, or removes a bot chat command.
+A CI gate (.github/workflows/panel-command-sync.yaml) runs this on every
+push and pull request. When the lua file is absent the check skips (exit 0)
+instead of failing. Run locally after any change that adds, renames, or
+removes a bot chat command.
 
 Scope limit: only command and sub-command names are checked. Argument
 words (marks, roles, skill levels) are parsed by each handler and are
