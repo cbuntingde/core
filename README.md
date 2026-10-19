@@ -31,7 +31,8 @@ what players type in game, and automated build and test checks.
   instead of piling up, and bots focus the marked target when there
   is one.
 - The download includes an optional add-on with the clickable panel;
-  its own readme explains how to switch it on.
+  its own readme explains how to switch it on. One button assembles a
+  full dungeon group (tank, healer, damage) at your level.
 
 ## Solo-friendly world
 
