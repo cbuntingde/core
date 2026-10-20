@@ -122,6 +122,7 @@ Progression.h
 
 # Session / remediation artifacts
 plan.md
+plan-*.md
 notes.md
 AGENTS.md
 .agents/
