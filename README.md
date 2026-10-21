@@ -45,6 +45,14 @@ what players type in game, and automated build and test checks.
 - Two helper orders look after the whole group at once: mending
   everyone's gear and bringing the fallen back after a wipe.
 
+## Gameplay fixes
+
+- Each player can roll only once for a piece of group loot.
+- Spells that bring a target in front of the caster turn the target to face
+  the caster correctly.
+- The profession helper can teach fishing even after you have learned two
+  primary professions.
+
 ## Safer server
 
 - The secure connection to game clients loads only from its proper
