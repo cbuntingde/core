@@ -70,6 +70,8 @@ what players type in game, and automated build and test checks.
   save may still need recovery.
 - Restored party members are remembered after they have joined, and each saved
   group is replaced together so it cannot mix old and new members.
+- Server records keep reliable timestamps when several problems are reported
+  at the same time.
 
 ## Quality checks
 
