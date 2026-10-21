@@ -26,6 +26,7 @@
 #include <functional>
 #include <atomic>
 #include <future>
+#include "IO/Multithreading/CreateThread.h"
 
 #ifdef WIN32
 #undef ERROR
@@ -96,8 +97,27 @@ public:
         if (m_status != Status::STOPPED || !m_size)
             return;
         m_status = Status::STARTING;
-        for (int i = 0; i < m_size; i++)
-            m_workers.emplace_back(new WORKER_T(this, i, m_errorHandling));
+        try
+        {
+            for (size_t i = 0; i < m_size; ++i)
+            {
+                m_workers.emplace_back(new WORKER_T(this, static_cast<int>(i), m_errorHandling));
+                auto* worker = m_workers.back().get();
+                worker->thread = IO::Multithreading::CreateThread(m_poolName + "[" + std::to_string(i) + "]", [worker]() { worker->loop_wrapper(); });
+            }
+        }
+        catch (...)
+        {
+            {
+                std::unique_lock<std::shared_timed_mutex> lock(m_mutex);
+                m_status = Status::TERMINATING;
+            }
+            m_waitForWork.notify_all();
+            for (auto& worker : m_workers)
+                if (worker->thread.joinable())
+                    worker->thread.join();
+            throw;
+        }
         m_status = Status::READY;
     }
 
@@ -148,6 +168,9 @@ public:
     void clearWorkload();
 
 private:
+    std::future<void> startWorkload(Callable pre, Callable post);
+    bool executeTask(Callable const& task);
+
     struct worker {
         explicit worker(ThreadPool *pool, int id, ErrorHandling mode);
         virtual ~worker();
@@ -192,11 +215,11 @@ private:
 
     using workers_t = std::vector<std::unique_ptr<worker>>;
 
-    Status m_status = Status::STOPPED;
+    std::atomic<Status> m_status{Status::STOPPED};
     std::string m_poolName;
     ErrorHandling m_errorHandling;
     size_t m_size;
-    std::shared_timed_mutex m_mutex;
+    mutable std::shared_timed_mutex m_mutex;
     std::condition_variable_any m_waitForWork;
     workload_t m_workload;
     ClearMode m_clearMode;

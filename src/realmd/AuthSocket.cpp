@@ -32,6 +32,7 @@
 #include "Log.h"
 #include "RealmList.h"
 #include "AuthSocket.h"
+#include "Log.h"
 #include "AuthCodes.h"
 #include "LoginThrottle.h"
 #include "Util.h"
@@ -75,11 +76,14 @@ void AuthSocket::Start()
 {
     if (int secs = sConfig.GetIntDefault("MaxSessionDuration", 300))
     {
-        m_sessionDurationTimeout = sAsyncSystemTimer.ScheduleFunctionOnce(std::chrono::seconds(secs), [this]()
+        std::weak_ptr<AuthSocket> weakSelf = shared_from_this();
+        m_sessionDurationTimeout = sAsyncSystemTimer.ScheduleFunctionOnce(std::chrono::seconds(secs), [weakSelf]()
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[%s] Connection has reached MaxSessionDuration. Closing socket...", this->GetRemoteIpString().c_str());
-            // It's correct that we capture _this_ and not a shared_ptr, since the timer will be canceled in destructor
-            this->CloseSocket();
+            if (auto self = weakSelf.lock())
+            {
+                sLog.Out(LOG_NETWORK, LOG_LVL_DETAIL, "[%s] Connection has reached MaxSessionDuration. Closing socket...", self->GetRemoteIpString().c_str());
+                self->CloseSocket();
+            }
         });
     }
 

@@ -23,6 +23,7 @@
     \ingroup mangosd
 */
 
+#include <atomic>
 #include <memory>
 
 #include "Common.h"
@@ -60,13 +61,13 @@
 
 #ifdef WIN32
 #include "ServiceWin32.h"
-extern volatile int m_ServiceStatus;
+extern std::atomic<int> m_ServiceStatus;
 #endif
 
 INSTANTIATE_SINGLETON_1(Master);
 
-volatile uint32 Master::m_masterLoopCounter = 0;
-volatile bool Master::m_handleSigvSignals = false;
+std::atomic<uint32> Master::m_masterLoopCounter{0};
+std::atomic<bool> Master::m_handleSigvSignals{false};
 
 void freezeDetector(uint32 _delaytime)
 {

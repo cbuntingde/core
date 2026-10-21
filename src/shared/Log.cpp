@@ -38,6 +38,15 @@ INSTANTIATE_SINGLETON_1(Log);
 
 namespace
 {
+bool GetLocalTime(time_t value, tm& result)
+{
+#if PLATFORM == PLATFORM_WINDOWS
+    return localtime_s(&result, &value) == 0;
+#else
+    return localtime_r(&value, &result) != nullptr;
+#endif
+}
+
 uint16 GetConsoleColor()
 {
 #if PLATFORM == PLATFORM_WINDOWS
@@ -301,7 +310,10 @@ FILE* Log::OpenLogFile(char const* configFileName, char const* defaultFileName, 
 void Log::OutTimestamp(FILE* file)
 {
     time_t t = time(nullptr);
-    tm* aTm = localtime(&t);
+    tm local{};
+    if (!GetLocalTime(t, local))
+        return;
+    tm const* aTm = &local;
     //       YYYY   year
     //       MM     month (2 digits 01-12)
     //       DD     day (2 digits 01-31)
@@ -314,7 +326,10 @@ void Log::OutTimestamp(FILE* file)
 void Log::OutTime(FILE* where)
 {
     time_t t = time(nullptr);
-    tm* aTm = localtime(&t);
+    tm local{};
+    if (!GetLocalTime(t, local))
+        return;
+    tm const* aTm = &local;
     //       YYYY   year
     //       MM     month (2 digits 01-12)
     //       DD     day (2 digits 01-31)
@@ -327,7 +342,10 @@ void Log::OutTime(FILE* where)
 std::string Log::GetTimestampStr()
 {
     time_t t = time(nullptr);
-    tm* aTm = localtime(&t);
+    tm local{};
+    if (!GetLocalTime(t, local))
+        return {};
+    tm const* aTm = &local;
     //       YYYY   year
     //       MM     month (2 digits 01-12)
     //       DD     day (2 digits 01-31)

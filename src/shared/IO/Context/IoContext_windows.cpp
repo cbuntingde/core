@@ -65,10 +65,9 @@ bool IO::IoContext::IsRunning() const
 
 void IO::IoContext::Shutdown()
 {
-    if (m_isRunning)
+    if (m_isRunning.exchange(false))
     {
         uint32_t runningThreadsCountLocal = m_runningThreadsCount; // local count to prevent race condition after `running = false`
-        m_isRunning = false;
 
         // We need to wake up the running threads by sending a "null-completion-event" and wait until all thread stopped
         for (uint32_t i = 0; i < runningThreadsCountLocal; i++)

@@ -71,6 +71,10 @@ class SqlConnection
         // can't rollback without transaction support
         virtual bool RollbackTransaction() { return true; }
 
+        // Reconnect only before an operation, never by replaying an uncertain write.
+        virtual bool EnsureConnection() { return true; }
+        virtual bool CanRetryTransaction() const { return false; }
+
         //methods to work with prepared statements
         bool ExecuteStmt(int nIndex, SqlStmtParameters const& id);
         std::unique_ptr<QueryResult> QueryStmt(int nIndex, SqlStmtParameters const& id);
@@ -290,6 +294,8 @@ class Database
         bool NextSerialDelayedOperation(int workerId, SqlOperation*& op);
 
         bool HasAsyncQuery();
+        bool HasAsyncWriteError() const { return m_asyncWriteError.load(); }
+        void ReportAsyncWriteError();
 
         void AddToSerialDelayQueue(SqlOperation* op);
 
@@ -300,7 +306,7 @@ class Database
                      m_pResultQueue(nullptr), m_numAsyncWorkers(0),
                      m_bAllowAsyncTransactions(false), m_iStmtIndex(-1), m_logSQL(false), m_pingIntervalMs(0)
         {
-            m_nQueryCounter = -1;
+            m_nQueryCounter = 0;
         }
 
         //factory method to create SqlConnection objects
@@ -326,7 +332,7 @@ class Database
 
         //connection helper counters
         int m_nQueryConnPoolSize;                                           // Current size of query connection pool
-        std::atomic<int> m_nQueryCounter;                                   // Counter for connection selection
+        std::atomic<uint32> m_nQueryCounter;                                   // Counter for connection selection
 
         //lets use pool of connections for sync queries
         typedef std::vector< SqlConnection* > SqlConnectionContainer;
@@ -341,6 +347,7 @@ class Database
         std::vector<std::shared_ptr<SqlDelayThread>>    m_threadsBodies;    // Pointer to delay sql executer (owned by m_delayThread)
         std::vector<std::thread> m_delayThreads;                            // Pointer to executer thread
 
+        std::atomic<bool> m_asyncWriteError{false};
         bool m_bAllowAsyncTransactions;                                     // Flag which specifies if async transactions are enabled
 
         //PREPARED STATEMENT REGISTRY

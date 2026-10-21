@@ -23,6 +23,7 @@
     \ingroup mangosd
 */
 
+#include <atomic>
 #include "Common.h"
 #include "World.h"
 #include "WorldRunnable.h"
@@ -40,7 +41,7 @@
 
 #ifdef WIN32
 #include "ServiceWin32.h"
-extern volatile int m_ServiceStatus;
+extern std::atomic<int> m_ServiceStatus;
 #endif
 
 // Heartbeat for the World

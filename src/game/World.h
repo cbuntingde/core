@@ -771,7 +771,7 @@ class World
         void ShutdownCancel();
         void ShutdownMsg(bool show = false, Player* player = nullptr);
         static uint8 GetExitCode() { return m_ExitCode; }
-        static void StopNow(uint8 exitcode) { m_stopEvent = true; m_ExitCode = exitcode; }
+        static void StopNow(uint8 exitcode) { m_ExitCode = exitcode; m_stopEvent = true; }
         static bool IsStopped() { return m_stopEvent; }
 
         void Update(uint32 diff);
@@ -918,8 +918,8 @@ class World
         bool configNoReload(bool reload, eConfigFloatValues index, char const* fieldname, float defvalue);
         bool configNoReload(bool reload, eConfigBoolValues index, char const* fieldname, bool defvalue);
 
-        static volatile bool m_stopEvent;
-        static uint8 m_ExitCode;
+        static std::atomic<bool> m_stopEvent;
+        static std::atomic<uint8> m_ExitCode;
         uint32 m_ShutdownTimer = 0;
         uint32 m_ShutdownMask = 0;
 

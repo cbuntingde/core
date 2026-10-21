@@ -21,6 +21,7 @@
  */
 
 #include "WorldSocket.h"
+#include "Log.h"
 #include "WorldSocketMgr.h"
 #include "WorldSession.h"
 
@@ -83,10 +84,7 @@ WorldSocket::WorldSocket(IO::Networking::AsyncSocket socket)
 
 WorldSocket::~WorldSocket()
 {
-    // Cancel the timeout before touching anything else. Cancel() waits for an in-flight
-    // callback to finish (DeleteTimerQueueTimer with INVALID_HANDLE_VALUE), but only on the
-    // branch where it wins the pending-timer erase race. Closing the socket first could let
-    // the callback run against a partially destroyed object, so cancel first.
+    // Release pending timer state before closing the connection.
     if (m_sessionNoAuthTimeout)
     {
         m_sessionNoAuthTimeout->Cancel();
@@ -537,10 +535,10 @@ void WorldSocket::SendPacket(WorldPacket packet)
         return;
 
     // We don't want to allocate or encrypt anything inside the world thread, so we move everything to the IO thread.
-    m_sendQueueLock.lock();
-    if (m_sendQueue.size() > 1024) // There should never be so many packets queued up. The socket is probably not responding.
+    std::unique_lock<std::mutex> lock(m_sendQueueLock);
+    if (m_sendQueue.size() >= 1024) // There should never be so many packets queued up. The socket is probably not responding.
     {
-        m_sendQueueLock.unlock();
+        lock.unlock();
         sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "[%s] Send queue is full. Disconnecting.", GetRemoteIpString().c_str());
         CloseSocket();
         return;
@@ -551,7 +549,7 @@ void WorldSocket::SendPacket(WorldPacket packet)
     // the running loop or we observe the cleared flag and start a new one. Otherwise a packet
     // pushed between its empty-check and clear would strand in the queue until the next send.
     bool const alreadyRunning = m_sendQueueIsRunning.test_and_set();
-    m_sendQueueLock.unlock();
+    lock.unlock();
 
     // Start AsyncProcessingSendQueue which take things from the queue
     if (alreadyRunning)
@@ -577,29 +575,23 @@ void WorldSocket::HandleResultOfAsyncWrite(IO::NetworkError const& error, std::s
         return;
     }
 
-    m_sendQueueLock.lock();
-    if (m_sendQueue.empty())
+    std::queue<WorldPacket> packets;
     {
-        // Must be cleared while holding the queue lock, see comment in SendPacket().
-        m_sendQueueIsRunning.clear();
-        m_sendQueueLock.unlock();
-        return;
-    }
-    m_sendQueueLock.unlock();
-
-    // Combine all packets into `alreadyAllocatedBuffer`
-    alreadyAllocatedBuffer->clear();
-    while (!m_sendQueue.empty())
-    {
-        m_sendQueueLock.lock();
-        if (m_sendQueue.empty()) // re-check after we locked the queue if it's really not empty
+        std::lock_guard<std::mutex> lock(m_sendQueueLock);
+        if (m_sendQueue.empty())
         {
-            m_sendQueueLock.unlock();
-            break;
+            m_sendQueueIsRunning.clear();
+            return;
         }
-        WorldPacket packet = std::move(m_sendQueue.front());
-        m_sendQueue.pop();
-        m_sendQueueLock.unlock();
+        packets.swap(m_sendQueue);
+    }
+
+    // A finite batch guarantees progress even while producers enqueue new packets.
+    alreadyAllocatedBuffer->clear();
+    while (!packets.empty())
+    {
+        WorldPacket packet = std::move(packets.front());
+        packets.pop();
 
         ServerPktHeader header{};
 
@@ -627,11 +619,14 @@ void WorldSocket::Start()
     // Start auto timeout loop
     if (int secs = sConfig.GetIntDefault("Network.TimeoutSecsIfNoAuth", 10))
     {
-        m_sessionNoAuthTimeout = sAsyncSystemTimer.ScheduleFunctionOnce(std::chrono::seconds(secs), [this]()
+        std::weak_ptr<WorldSocket> weakSelf = shared_from_this();
+        m_sessionNoAuthTimeout = sAsyncSystemTimer.ScheduleFunctionOnce(std::chrono::seconds(secs), [weakSelf]()
         {
-            sLog.Out(LOG_NETWORK, LOG_LVL_DETAIL, "[%s] Connection has reached TimeoutSecsIfNoAuth. Closing socket...", this->GetRemoteIpString().c_str());
-            // It's correct that we capture _this_ and not a shared_ptr, since the timer will be canceled in destructor
-            this->CloseSocket();
+            if (auto self = weakSelf.lock())
+            {
+                sLog.Out(LOG_NETWORK, LOG_LVL_DETAIL, "[%s] Connection has reached TimeoutSecsIfNoAuth. Closing socket...", self->GetRemoteIpString().c_str());
+                self->CloseSocket();
+            }
         });
     }
 

@@ -21,6 +21,7 @@
 
 #ifdef WIN32
 
+#include <atomic>
 #include "Common.h"
 #include "Log.h"
 #include <cstring>
@@ -32,7 +33,7 @@ extern char serviceLongName[];
 extern char serviceName[];
 extern char serviceDescription[];
 
-extern volatile int m_ServiceStatus;
+extern std::atomic<int> m_ServiceStatus;
 
 SERVICE_STATUS serviceStatus;
 

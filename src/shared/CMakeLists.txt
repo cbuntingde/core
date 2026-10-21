@@ -138,10 +138,8 @@ set (shared_SRCS
     IO/Networking/DNS.cpp
     IO/Multithreading/CreateThread.h
     IO/Multithreading/CreateThread.cpp
-    IO/Timer/impl/windows/AsyncSystemTimer.cpp
-    IO/Timer/impl/windows/TimerHandle.cpp
-    IO/Timer/impl/unix/AsyncSystemTimer.cpp
-    IO/Timer/impl/unix/TimerHandle.cpp
+    IO/Timer/AsyncSystemTimer.cpp
+    IO/Timer/TimerHandle.cpp
     IO/Timer/AsyncSystemTimer.h
     IO/Filesystem/FileSystem.h
     IO/Filesystem/FileHandle.h
@@ -180,8 +178,6 @@ if(WIN32) # For window build: Exclude Unix/MacOS files
     IO/Context/IoContext_bsd.cpp
     IO/Networking/AsyncSocket_posix.cpp
     IO/Networking/AsyncSocketAcceptor_posix.cpp
-    IO/Timer/impl/unix/AsyncSystemTimer.cpp
-    IO/Timer/impl/unix/TimerHandle.cpp
     IO/Filesystem/impl/unix/FileSystem.cpp
     IO/Filesystem/impl/unix/FileHandle.cpp
   )
@@ -194,8 +190,6 @@ else()
     IO/Context/IoContext_windows.cpp
     IO/Networking/AsyncSocket_windows.cpp
     IO/Networking/AsyncSocketAcceptor_windows.cpp
-    IO/Timer/impl/windows/AsyncSystemTimer.cpp
-    IO/Timer/impl/windows/TimerHandle.cpp
     IO/Filesystem/impl/windows/FileSystem.cpp
     IO/Filesystem/impl/windows/FileHandle.cpp
   )

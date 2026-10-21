@@ -70,6 +70,7 @@ protected:
 private:
     void RemoveBinds();
 
+    bool m_bindValid = false;
     MYSQL* m_pMySQLConn;
     MYSQL_STMT* m_stmt;
     std::unique_ptr<MYSQL_BIND[]> m_pInputArgs;
@@ -84,6 +85,8 @@ class MySQLConnection : public SqlConnection
 
         bool OpenConnection(bool reconnect) override;
         bool Reconnect();
+        bool EnsureConnection() override;
+        bool CanRetryTransaction() const override;
         bool HandleMySQLError(uint32 errNo);
 
         std::unique_ptr<QueryResult> Query(std::string const& sql) override;
@@ -104,6 +107,9 @@ class MySQLConnection : public SqlConnection
         bool _Query(std::string const& sql, MYSQL_RES** pResult, MYSQL_FIELD** pFields, uint64* pRowCount, uint32* pFieldCount);
 
         MYSQL* mMysql;
+        bool m_inTransaction = false;
+        bool m_needsReconnect = false;
+        uint32 m_lastError = 0;
 };
 
 class DatabaseMysql : public Database

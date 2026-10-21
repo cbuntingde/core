@@ -4,6 +4,7 @@
 add_executable(vmangos_tests
     TestMain.cpp
     DatabaseTests.cpp
+    ReliabilityTests.cpp
     QueryResultStmtTests.cpp
     BotTelemetryTests.cpp
     BotStanceTests.cpp
@@ -42,6 +43,11 @@ if(WIN32)
     debug ${MYSQL_DEBUG_LIBRARY}
   )
   target_compile_options(vmangos_tests PRIVATE /bigobj /EHsc)
+  # The bundled client is an import library; tests now exercise its lifecycle.
+  add_custom_command(TARGET vmangos_tests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_$<$<CONFIG:Debug>:Debug>$<$<NOT:$<CONFIG:Debug>>:release>/libmySQL.dll"
+      "$<TARGET_FILE_DIR:vmangos_tests>/libmySQL.dll")
 else()
   find_package(Threads)
   target_link_libraries(vmangos_tests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
@@ -49,3 +55,6 @@ else()
   # same language level as the code they cover.
   target_compile_options(vmangos_tests PRIVATE -Wall -Wextra)
 endif()
+
+add_test(NAME vmangos_tests COMMAND vmangos_tests)
+set_tests_properties(vmangos_tests PROPERTIES TIMEOUT 60)
