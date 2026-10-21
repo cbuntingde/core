@@ -198,6 +198,14 @@ static bool PartyBotAddBySpec(ChatHandler* handler, Player* pLeader, Player* pCl
 
 void PlayerBotMgr::Update(uint32 diff)
 {
+    ObjectGuid rosterLeader;
+    std::set<ObjectGuid> changedLeaders;
+    while (m_rosterSaves.next(rosterLeader))
+        changedLeaders.insert(rosterLeader);
+    for (auto leaderGuid : changedLeaders)
+        if (Player* leader = ObjectAccessor::FindPlayer(leaderGuid))
+            SavePartyRoster(leader);
+
     // Bot telemetry: windowed per-class report to the server log.
     BotTelemetry::Instance().Update(diff);
 
@@ -255,14 +263,8 @@ void PlayerBotMgr::Update(uint32 diff)
                         iter->second->ai->me->ResurrectPlayer(1.0f);
                         iter->second->ai->me->SpawnCorpseBones();
                     }
-                    if (iter->second->ai)
-                    {
-                        if (PartyBotAI* pBotAI = dynamic_cast<PartyBotAI*>(iter->second->ai.get()))
-                        {
-                            if (Player* pLeader = pBotAI->GetPartyLeader())
-                                SavePartyRoster(pLeader);
-                        }
-                    }
+                    // Automatic cleanup (including owner logout) preserves the saved
+                    // group. Explicit removals request their own roster update.
                     iter->second->ai->me->RemoveFromGroup();
                 }
 
@@ -894,6 +896,10 @@ bool ChatHandler::PartyBotAddRequirementCheck(Player const* pPlayer, Player cons
 static void SavePartyRoster(Player* pLeader)
 {
     uint32 accountId = pLeader->GetSession()->GetAccountId();
+    // Snapshot replacement must remain atomic and ordered for this account,
+    // including when multiple database workers are configured.
+    if (!CharacterDatabase.BeginTransaction(accountId))
+        return;
     CharacterDatabase.PExecute("DELETE FROM `partybot_roster` WHERE `account` = '%u'", accountId);
 
     if (Group* pGroup = pLeader->GetGroup())
@@ -904,6 +910,9 @@ static void SavePartyRoster(Player* pLeader)
             Player* pMember = itr->getSource();
             if (!pMember || pMember == pLeader || !pMember->IsBot())
                 continue;
+            if (auto* ai = dynamic_cast<PartyBotAI*>(pMember->AI()))
+                if (ai->botEntry->requestRemoval)
+                    continue;
             uint8 botRole = ROLE_INVALID;
             if (pMember->AI())
             {
@@ -914,6 +923,7 @@ static void SavePartyRoster(Player* pLeader)
                 accountId, slot++, pMember->GetRace(), pMember->GetClass(), botRole, pMember->GetLevel());
         }
     }
+    CharacterDatabase.CommitTransaction();
 }
 
 static bool PartyBotAddBySpec(ChatHandler* handler, Player* pLeader, Player* pClone, CombatBotRoles botRole, uint8 botRace, uint8 botClass, uint32 botLevel)
@@ -925,7 +935,6 @@ static bool PartyBotAddBySpec(ChatHandler* handler, Player* pLeader, Player* pCl
     if (sPlayerBotMgr.AddBot(ai))
     {
         handler->SendSysMessage("New party bot added.");
-        SavePartyRoster(pLeader);
         return true;
     }
 
@@ -1102,7 +1111,6 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
         return false;
     }
 
-    SavePartyRoster(pPlayer);
     PSendSysMessage("Loading %s as party bot.", name.c_str());
     return true;
 }
@@ -1147,7 +1155,7 @@ bool ChatHandler::HandlePartyBotLoadLastCommand(char* /*args*/)
         SetSentErrorMessage(true);
         return false;
     }
-    PSendSysMessage("%u party bots restored.", restored);
+    PSendSysMessage("Requested %u party bots from your saved group.", restored);
     return true;
 }
 
@@ -2153,6 +2161,8 @@ bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
         if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
         {
             pAI->botEntry->requestRemoval = true;
+            if (Player* leader = pAI->GetPartyLeader())
+                sPlayerBotMgr.QueuePartyRosterSave(leader->GetObjectGuid());
             return true;
         }
     }

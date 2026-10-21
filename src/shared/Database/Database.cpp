@@ -71,7 +71,8 @@ SqlPreparedStatement* SqlConnection::GetStmt(int nIndex)
         std::string fmt = m_db.GetStmtString(nIndex);
         MANGOS_ASSERT(fmt.length());
         //allocate SQlPreparedStatement object
-        pStmt = CreateStatement(fmt);
+        auto candidate = std::unique_ptr<SqlPreparedStatement>(CreateStatement(fmt));
+        pStmt = candidate.get();
         //prepare statement
         if(!pStmt->prepare())
         {
@@ -81,7 +82,7 @@ SqlPreparedStatement* SqlConnection::GetStmt(int nIndex)
         }
 
         //save statement in internal registry
-        m_holder[nIndex] = pStmt;
+        m_holder[nIndex] = candidate.release();
     }
     else
         pStmt = m_holder[nIndex];
@@ -124,7 +125,7 @@ bool SqlConnection::Initialize(std::string const& infoString)
 
 std::unique_ptr<QueryResult> SqlConnection::QueryStmt(int nIndex, SqlStmtParameters const& id)
 {
-    if(nIndex == -1)
+    if(nIndex == -1 || !EnsureConnection())
         return nullptr;
 
     //get prepared statement object
@@ -140,7 +141,7 @@ std::unique_ptr<QueryResult> SqlConnection::QueryStmt(int nIndex, SqlStmtParamet
 
 bool SqlConnection::ExecuteStmt(int nIndex, SqlStmtParameters const& id)
 {
-    if(nIndex == -1)
+    if(nIndex == -1 || !EnsureConnection())
         return false;
 
     //get prepared statement object
@@ -158,58 +159,82 @@ bool SqlConnection::ExecuteStmt(int nIndex, SqlStmtParameters const& id)
 Database::~Database()
 {
     StopServer();
+    delete m_delayQueue;
 }
 
 bool Database::Initialize(char const* infoString, int nConns /*= 1*/, int nWorkers)
 {
-    // Enable logging of SQL commands (usually only GM commands)
-    // (See method: PExecuteLog)
-    m_logSQL = sConfig.GetBoolDefault("LogSQL", false);
-    m_logsDir = sConfig.GetStringDefault("LogsDir","");
-    if(!m_logsDir.empty())
+    if (nWorkers < 1 || nWorkers > MAX_CONNECTION_POOL_SIZE)
     {
-        if((m_logsDir.at(m_logsDir.length()-1)!='/') && (m_logsDir.at(m_logsDir.length()-1)!='\\'))
-            m_logsDir.append("/");
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Database worker count must be between 1 and %d", MAX_CONNECTION_POOL_SIZE);
+        return false;
     }
-
-    m_pingIntervalMs = sConfig.GetIntDefault("Database.AliveCheckInternal", 600) * IN_MILLISECONDS;
-
-    //create DB connections
-
-    //setup connection pool size
-    if(nConns < MIN_CONNECTION_POOL_SIZE)
-        m_nQueryConnPoolSize = MIN_CONNECTION_POOL_SIZE;
-    else if(nConns > MAX_CONNECTION_POOL_SIZE)
-        m_nQueryConnPoolSize = MAX_CONNECTION_POOL_SIZE;
-    else
-        m_nQueryConnPoolSize = nConns;
-
-    //create connection pool for sync requests
-    for (int i = 0; i < m_nQueryConnPoolSize; ++i)
+    try
     {
-        SqlConnection* pConn = CreateConnection();
-        if(!pConn->Initialize(infoString))
+        // Enable logging of SQL commands (usually only GM commands)
+        // (See method: PExecuteLog)
+        m_logSQL = sConfig.GetBoolDefault("LogSQL", false);
+        m_logsDir = sConfig.GetStringDefault("LogsDir","");
+        if(!m_logsDir.empty())
         {
-            delete pConn;
+            if((m_logsDir.at(m_logsDir.length()-1)!='/') && (m_logsDir.at(m_logsDir.length()-1)!='\\'))
+                m_logsDir.append("/");
+        }
+
+        m_pingIntervalMs = sConfig.GetIntDefault("Database.AliveCheckInternal", 600) * IN_MILLISECONDS;
+
+        //create DB connections
+
+        //setup connection pool size
+        if(nConns < MIN_CONNECTION_POOL_SIZE)
+            m_nQueryConnPoolSize = MIN_CONNECTION_POOL_SIZE;
+        else if(nConns > MAX_CONNECTION_POOL_SIZE)
+            m_nQueryConnPoolSize = MAX_CONNECTION_POOL_SIZE;
+        else
+            m_nQueryConnPoolSize = nConns;
+
+        //create connection pool for sync requests
+        for (int i = 0; i < m_nQueryConnPoolSize; ++i)
+        {
+            auto pConn = std::unique_ptr<SqlConnection>(CreateConnection());
+            if(!pConn->Initialize(infoString))
+            {
+                StopServer();
+                return false;
+            }
+
+            m_pQueryConnections.push_back(pConn.get());
+            pConn.release();
+        }
+
+        //create and initialize connection for async requests
+        m_pResultQueue = new SqlResultQueue;
+        m_pAsyncConn = CreateConnection();
+        if(!m_pAsyncConn->Initialize(infoString))
+        {
+            StopServer();
             return false;
         }
 
-        m_pQueryConnections.push_back(pConn);
+        m_numAsyncWorkers = 0;
+        m_threadsBodies.reserve(nWorkers);
+        m_delayThreads.reserve(nWorkers);
+
+        for (int i = 0; i < nWorkers; ++i)
+            if (!InitDelayThread(infoString))
+            {
+                StopServer();
+                return false;
+            }
+
+        return true;
     }
-
-    //create and initialize connection for async requests
-    m_pResultQueue = new SqlResultQueue;
-    m_pAsyncConn = CreateConnection();
-    if(!m_pAsyncConn->Initialize(infoString))
+    catch (std::exception const& error)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Database initialization failed: %s", error.what());
+        StopServer();
         return false;
-
-    m_numAsyncWorkers = nWorkers;
-
-    for (int i = 0; i < nWorkers; ++i)
-        if (!InitDelayThread(infoString))
-            return false;
-
-    return true;
+    }
 }
 
 void Database::StopServer()
@@ -242,29 +267,28 @@ bool Database::InitDelayThread(std::string const& infoString)
 {
     //New delay thread for delay execute
 
-    SqlConnection* threadConnection = CreateConnection();
+    auto threadConnection = std::unique_ptr<SqlConnection>(CreateConnection());
     if(!threadConnection->Initialize(infoString))
         return false;
 
-    std::shared_ptr<SqlDelayThread> tbody = std::make_shared<SqlDelayThread>(this, threadConnection);
+    std::shared_ptr<SqlDelayThread> tbody = std::make_shared<SqlDelayThread>(this, threadConnection.get());
+    threadConnection.release();
     m_threadsBodies.emplace_back(tbody);
-    m_delayThreads.emplace_back(IO::Multithreading::CreateThread("DB:" + threadConnection->DatabaseName(), [tbody](){
+    m_delayThreads.emplace_back(IO::Multithreading::CreateThread("DB:" + tbody->DatabaseName(), [tbody](){
         tbody->run();
     }));
+    m_numAsyncWorkers = static_cast<uint32>(m_delayThreads.size());
 
     return true;
 }
 
 void Database::HaltDelayThread()
 {
-    if (m_delayThreads.empty() || m_threadsBodies.empty())
-        return;
-
-    for (uint32 i = 0; i < m_numAsyncWorkers; ++i)
-        m_threadsBodies[i]->Stop();
-
-    for (uint32 i = 0; i < m_numAsyncWorkers; ++i)
-        m_delayThreads[i].join();
+    for (auto const& worker : m_threadsBodies)
+        worker->Stop();
+    for (auto& thread : m_delayThreads)
+        if (thread.joinable())
+            thread.join();
 
     m_threadsBodies.clear();
     m_delayThreads.clear();
@@ -304,14 +328,8 @@ void Database::escape_string(std::string& str)
 
 SqlConnection* Database::getQueryConnection()
 {
-    int nCount = 0;
-
-    if(m_nQueryCounter == long(1 << 31))
-        m_nQueryCounter = 0;
-    else
-        nCount = ++m_nQueryCounter;
-
-    return m_pQueryConnections[nCount % m_nQueryConnPoolSize];
+    auto const index = m_nQueryCounter.fetch_add(1, std::memory_order_relaxed);
+    return m_pQueryConnections[index % m_pQueryConnections.size()];
 }
 
 void Database::Ping()
@@ -341,7 +359,7 @@ bool Database::PExecuteLog(char const* format,...)
     int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);
     va_end(ap);
 
-    if(res==-1)
+    if(res < 0 || size_t(res) >= sizeof(szQuery))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format);
         return false;
@@ -384,7 +402,7 @@ std::unique_ptr<QueryResult> Database::PQuery(char const* format,...)
     int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);
     va_end(ap);
 
-    if(res==-1)
+    if(res < 0 || size_t(res) >= sizeof(szQuery))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format);
         return nullptr;
@@ -403,7 +421,7 @@ std::unique_ptr<QueryNamedResult> Database::PQueryNamed(char const* format,...)
     int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);
     va_end(ap);
 
-    if(res==-1)
+    if(res < 0 || size_t(res) >= sizeof(szQuery))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format);
         return nullptr;
@@ -419,6 +437,8 @@ bool Database::Execute(char const* sql)
 
 bool Database::Execute(DbExecMode mode, char const* sql)
 {
+    if (HasAsyncWriteError())
+        return false;
     if (!m_pAsyncConn)
         return false;
 
@@ -452,7 +472,7 @@ bool Database::PExecute(DbExecMode mode, char const* format,...)
     int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);
             va_end(ap);
 
-    if(res==-1)
+    if(res < 0 || size_t(res) >= sizeof(szQuery))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format);
         return false;
@@ -472,7 +492,7 @@ bool Database::PExecute(char const* format,...)
     int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);
     va_end(ap);
 
-    if(res==-1)
+    if(res < 0 || size_t(res) >= sizeof(szQuery))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format);
         return false;
@@ -492,7 +512,7 @@ bool Database::DirectPExecute(char const* format,...)
     int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);
     va_end(ap);
 
-    if(res==-1)
+    if(res < 0 || size_t(res) >= sizeof(szQuery))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format);
         return false;
@@ -528,6 +548,11 @@ uint32 Database::GetTransactionSerialId()
 
 bool Database::CommitTransaction()
 {
+    if (HasAsyncWriteError())
+    {
+        m_currentTransaction.reset();
+        return false;
+    }
     // We must have a pending transaction
     if (!m_pAsyncConn || !m_currentTransaction.get())
         return false;
@@ -556,11 +581,8 @@ bool Database::CommitTransactionDirect()
         return false;
 
     // directly execute SqlTransaction
-    SqlTransaction* pTrans = m_currentTransaction.release();
-    pTrans->Execute(m_pAsyncConn);
-    delete pTrans;
-
-    return true;
+    std::unique_ptr<SqlTransaction> transaction(m_currentTransaction.release());
+    return transaction->Execute(m_pAsyncConn);
 }
 
 bool Database::RollbackTransaction()
@@ -594,7 +616,7 @@ void Database::AddToSerialDelayQueue(SqlOperation* op)
 
 bool Database::HasAsyncQuery()
 {
-    bool hasQuery = !m_delayQueue->empty_unsafe();
+    bool hasQuery = !m_delayQueue->empty();
 
     for (uint32 i = 0; i < m_numAsyncWorkers && !hasQuery; ++i)
         hasQuery = m_threadsBodies[i]->HasAsyncQuery();
@@ -660,8 +682,11 @@ bool Database::CheckRequiredMigrations(char const** migrations)
 
 bool Database::ExecuteStmt(SqlStatementID const& id, SqlStmtParameters* params)
 {
-    if (!m_pAsyncConn)
+    if (!m_pAsyncConn || HasAsyncWriteError())
+    {
+        delete params;
         return false;
+    }
 
     SqlTransaction* pTrans = m_currentTransaction.get();
     if (pTrans)
@@ -743,4 +768,10 @@ std::string Database::GetStmtString(int const stmtId) const
     }
 
     return std::string();
+}
+
+void Database::ReportAsyncWriteError()
+{
+    if (!m_asyncWriteError.exchange(true))
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Database %s: background write failed. Server shutdown required; inspect database errors before restarting. Uncertain writes will not be replayed.", m_pAsyncConn->DatabaseName().c_str());
 }

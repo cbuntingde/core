@@ -48,26 +48,45 @@ SqlTransaction::~SqlTransaction()
 
 bool SqlTransaction::Execute(SqlConnection* conn)
 {
-    if(m_queue.empty())
+    if (m_queue.empty())
         return true;
-
     LOCK_DB_CONN(conn);
-
-    conn->BeginTransaction();
-
-    int const nItems = m_queue.size();
-    for (int i = 0; i < nItems; ++i)
+    for (unsigned attempt = 0; attempt < 3; ++attempt)
     {
-        SqlOperation* pStmt = m_queue[i];
-
-        if(!pStmt->Execute(conn))
+        if (!conn->BeginTransaction())
+            return false;
+        bool success = true;
+        try
         {
-            conn->RollbackTransaction();
+            for (auto* operation : m_queue)
+            {
+                if (!operation->Execute(conn))
+                {
+                    success = false;
+                    break;
+                }
+            }
+            if (success)
+            {
+                if (conn->CommitTransaction())
+                    return true;
+                // A failed COMMIT is ambiguous. Never replay it.
+                conn->RollbackTransaction();
+                return false;
+            }
+        }
+        catch (...)
+        {
+            bool const rolledBack = conn->RollbackTransaction();
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Database transaction raised an exception; rollback %s; operation not replayed", rolledBack ? "succeeded" : "failed");
             return false;
         }
+        bool const retry = conn->CanRetryTransaction();
+        if (!conn->RollbackTransaction() || !retry || attempt == 2)
+            return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5 * (attempt + 1)));
     }
-
-    return conn->CommitTransaction();
+    return false;
 }
 
 SqlPreparedRequest::SqlPreparedRequest(int nIndex, SqlStmtParameters* arg) : m_nIndex(nIndex), m_param(arg)
@@ -159,12 +178,17 @@ SqlResultQueue::~SqlResultQueue(){}
 void SqlResultQueue::CancelAll()
 {
     MaNGOS::IQueryCallback* cb;
-    while (next(cb))
+    auto cancel = [](MaNGOS::IQueryCallback* callback)
     {
-        cb->SetResult(nullptr);
-        cb->Execute();
-        delete cb;
-    }
+        std::unique_ptr<MaNGOS::IQueryCallback> owned(callback);
+        owned->SetResult(nullptr);
+        owned->Execute();
+    };
+    while (next(cb))
+        cancel(cb);
+    while (_threadUnsafeWaitingQueries.next(cb))
+        cancel(cb);
+    numUnsafeQueries = 0;
 }
 
 bool SqlQueryHolder::Execute(MaNGOS::IQueryCallback* callback, Database* database, SqlResultQueue* queue)
@@ -241,7 +265,7 @@ bool SqlQueryHolder::SetPQuery(size_t index, char const* format, ...)
     int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);
     va_end(ap);
 
-    if(res == -1)
+    if(res < 0 || size_t(res) >= sizeof(szQuery))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format);
         return false;

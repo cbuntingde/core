@@ -76,10 +76,11 @@ SqlConnection* DatabaseMysql::CreateConnection()
 MySQLConnection::~MySQLConnection()
 {
     FreePreparedStatements();
-    mysql_close(mMysql);
+    if (mMysql)
+        mysql_close(mMysql);
 }
 
-bool MySQLConnection::OpenConnection(bool reconnect)
+bool MySQLConnection::OpenConnection(bool /*reconnect*/)
 {
     MYSQL* mysqlInit = mysql_init(nullptr);
     if (!mysqlInit)
@@ -89,6 +90,13 @@ bool MySQLConnection::OpenConnection(bool reconnect)
     }
 
     mysql_options(mysqlInit, MYSQL_SET_CHARSET_NAME, "utf8");
+    // The client must never reconnect behind the transaction state machine.
+    bool reconnectAutomatically = false;
+    if (mysql_options(mysqlInit, MYSQL_OPT_RECONNECT, &reconnectAutomatically))
+    {
+        mysql_close(mysqlInit);
+        return false;
+    }
 
     if (m_use_socket)                                           // socket use option (Unix/Linux)
     {
@@ -120,13 +128,23 @@ bool MySQLConnection::OpenConnection(bool reconnect)
         if (!mysql_autocommit(mMysql, 1))
             sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "AUTOCOMMIT SUCCESSFULLY SET TO 1");
         else
-            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "AUTOCOMMIT NOT SET TO 1");
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Could not enable database autocommit: %s", mysql_error(mMysql));
+            mysql_close(mMysql);
+            mMysql = nullptr;
+            return false;
+        }
         /*-------------------------------------*/
 
         // set connection properties to UTF8 to properly handle locales for different
         // server configs - core sends data in UTF8, so MySQL must expect UTF8 too
-        Execute("SET NAMES `utf8`");
-        Execute("SET CHARACTER SET `utf8`");
+        if (mysql_set_character_set(mMysql, "utf8"))
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Could not set database character set: %s", mysql_error(mMysql));
+            mysql_close(mMysql);
+            mMysql = nullptr;
+            return false;
+        }
 
         return true;
     }
@@ -143,9 +161,16 @@ bool MySQLConnection::Reconnect()
 {
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Reconnection attempt to database %s (on %s)", m_database.c_str(), m_host.c_str());
 
+    if (m_inTransaction)
+        return false;
+    // Statements must be destroyed while their original MYSQL handle is alive.
+    FreePreparedStatements();
+    if (mMysql)
+        mysql_close(mMysql);
+    mMysql = nullptr;
     if (OpenConnection(true))
     {
-        FreePreparedStatements(); // We need to prepare everything again!
+        m_needsReconnect = false;
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Successfully reconnected to %s @%s:%u.",
             m_database.c_str(), m_host.c_str(), m_port);
 
@@ -155,8 +180,24 @@ bool MySQLConnection::Reconnect()
     return false; // Failed to reconnect
 }
 
+bool MySQLConnection::EnsureConnection()
+{
+    m_lastError = 0;
+    return (mMysql && !m_needsReconnect) || (!m_inTransaction && Reconnect());
+}
+
+bool MySQLConnection::CanRetryTransaction() const
+{
+    // MySQL guarantees the complete transaction was rolled back for a deadlock.
+    // Network errors, timeouts and failed COMMIT have no such guarantee.
+    return m_lastError == ER_LOCK_DEADLOCK;
+}
+
 bool MySQLConnection::HandleMySQLError(uint32 errNo)
 {
+    m_lastError = errNo;
+    if (!errNo)
+        return false;
     switch (errNo)
     {
         case CR_SERVER_GONE_ERROR:
@@ -166,11 +207,12 @@ bool MySQLConnection::HandleMySQLError(uint32 errNo)
             #endif
         case CR_SERVER_LOST_EXTENDED:
         {
-            mysql_close(mMysql);
-            return Reconnect();
+            m_needsReconnect = true;
+            return false;
         }
 
         case ER_LOCK_DEADLOCK:
+        case ER_LOCK_WAIT_TIMEOUT:
             return false;
         // Query related errors - skip query
         case ER_WRONG_VALUE_COUNT:
@@ -196,7 +238,7 @@ bool MySQLConnection::HandleMySQLError(uint32 errNo)
 
 bool MySQLConnection::_Query(std::string const& sql, MYSQL_RES** pResult, MYSQL_FIELD** pFields, uint64* pRowCount, uint32* pFieldCount)
 {
-    if (!mMysql && !Reconnect())
+    if (!EnsureConnection())
         return false;
 
     uint32 _s = WorldTimer::getMSTime();
@@ -208,8 +250,7 @@ bool MySQLConnection::_Query(std::string const& sql, MYSQL_RES** pResult, MYSQL_
         sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "SQL: %s", sql.c_str());
         sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "[%u] %s", lErrno, mysql_error(mMysql));
 
-        if (HandleMySQLError(lErrno)) // If error is handled, just try again
-            return _Query(sql, pResult, pFields, pRowCount, pFieldCount);
+        HandleMySQLError(lErrno);
 
         return false;
     }
@@ -273,7 +314,7 @@ std::unique_ptr<QueryNamedResult> MySQLConnection::QueryNamed(std::string const&
 
 bool MySQLConnection::Execute(std::string const& sql)
 {
-    if (!mMysql)
+    if (!EnsureConnection())
         return false;
 
     uint32 _s = WorldTimer::getMSTime();
@@ -285,8 +326,7 @@ bool MySQLConnection::Execute(std::string const& sql)
         sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "SQL: %s", sql.c_str());
         sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "[%u] %s", lErrno, mysql_error(mMysql));
 
-        if (HandleMySQLError(lErrno)) // If error is handled, just try again
-            return Execute(sql);
+        HandleMySQLError(lErrno);
         return false;
     }
     else
@@ -299,10 +339,14 @@ bool MySQLConnection::Execute(std::string const& sql)
 
 bool MySQLConnection::_TransactionCmd(std::string const& sql)
 {
+    if (!mMysql || m_needsReconnect)
+        return false;
+    m_lastError = 0;
     if (mysql_query(mMysql, sql.c_str()))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: %s", sql.c_str());
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_error(mMysql));
+        HandleMySQLError(mysql_errno(mMysql));
         return false;
     }
     else
@@ -314,17 +358,29 @@ bool MySQLConnection::_TransactionCmd(std::string const& sql)
 
 bool MySQLConnection::BeginTransaction()
 {
-    return _TransactionCmd("START TRANSACTION");
+    if (m_inTransaction || !EnsureConnection() || !_TransactionCmd("START TRANSACTION"))
+        return false;
+    m_inTransaction = true;
+    return true;
 }
 
 bool MySQLConnection::CommitTransaction()
 {
-    return _TransactionCmd("COMMIT");
+    if (!m_inTransaction)
+        return false;
+    bool const success = _TransactionCmd("COMMIT");
+    if (success)
+        m_inTransaction = false;
+    return success;
 }
 
 bool MySQLConnection::RollbackTransaction()
 {
-    return _TransactionCmd("ROLLBACK");
+    bool const success = m_inTransaction && _TransactionCmd("ROLLBACK");
+    m_inTransaction = false;
+    if (!success)
+        m_needsReconnect = true; // Never reuse a connection with uncertain transaction state.
+    return success;
 }
 
 unsigned long MySQLConnection::escape_string(char* to, char const* from, unsigned long length)
@@ -374,6 +430,7 @@ bool MySqlPreparedStatement::prepare()
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: mysql_stmt_prepare() failed for '%s'", m_szFmt.c_str());
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        static_cast<MySQLConnection&>(m_pConn).HandleMySQLError(mysql_stmt_errno(m_stmt));
         return false;
     }
 
@@ -384,6 +441,7 @@ bool MySqlPreparedStatement::prepare()
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: mysql_stmt_attr_set() failed for '%s'", m_szFmt.c_str());
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        static_cast<MySQLConnection&>(m_pConn).HandleMySQLError(mysql_stmt_errno(m_stmt));
         return false;
     }
 
@@ -397,6 +455,7 @@ bool MySqlPreparedStatement::prepare()
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: no meta information for '%s'", m_szFmt.c_str());
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        static_cast<MySQLConnection&>(m_pConn).HandleMySQLError(mysql_stmt_errno(m_stmt));
         return false;
     }
 
@@ -423,6 +482,7 @@ bool MySqlPreparedStatement::prepare()
 
 void MySqlPreparedStatement::bind(SqlStmtParameters const& holder)
 {
+    m_bindValid = false;
     if(!isPrepared())
     {
         MANGOS_ASSERT(false);
@@ -431,7 +491,10 @@ void MySqlPreparedStatement::bind(SqlStmtParameters const& holder)
 
     //finalize adding params
     if(!m_pInputArgs)
+    {
+        m_bindValid = holder.boundParams() == 0;
         return;
+    }
 
     //verify if we bound all needed input parameters
     if(m_nParams != holder.boundParams())
@@ -455,7 +518,10 @@ void MySqlPreparedStatement::bind(SqlStmtParameters const& holder)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: mysql_stmt_bind_param() failed\n");
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        static_cast<MySQLConnection&>(m_pConn).HandleMySQLError(mysql_stmt_errno(m_stmt));
+        return;
     }
+    m_bindValid = true;
 }
 
 void MySqlPreparedStatement::addParam(int nIndex, SqlStmtFieldData const& data)
@@ -494,13 +560,14 @@ void MySqlPreparedStatement::RemoveBinds()
 
 bool MySqlPreparedStatement::execute()
 {
-    if(!isPrepared())
+    if(!isPrepared() || !m_bindValid)
         return false;
 
     if(mysql_stmt_execute(m_stmt))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: cannot execute '%s'", m_szFmt.c_str());
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        static_cast<MySQLConnection&>(m_pConn).HandleMySQLError(mysql_stmt_errno(m_stmt));
         return false;
     }
 
@@ -509,13 +576,14 @@ bool MySqlPreparedStatement::execute()
 
 std::unique_ptr<QueryResult> MySqlPreparedStatement::query()
 {
-    if(!isPrepared())
+    if(!isPrepared() || !m_bindValid)
         return nullptr;
 
     if(mysql_stmt_execute(m_stmt))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: cannot execute '%s'", m_szFmt.c_str());
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        static_cast<MySQLConnection&>(m_pConn).HandleMySQLError(mysql_stmt_errno(m_stmt));
         return nullptr;
     }
 
@@ -523,6 +591,7 @@ std::unique_ptr<QueryResult> MySqlPreparedStatement::query()
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL: cannot store result of '%s'", m_szFmt.c_str());
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL ERROR: %s", mysql_stmt_error(m_stmt));
+        static_cast<MySQLConnection&>(m_pConn).HandleMySQLError(mysql_stmt_errno(m_stmt));
         return nullptr;
     }
 
@@ -598,7 +667,7 @@ std::unique_ptr<QueryResult> MySqlPreparedStatement::query()
                 else
                     cells.push_back(QueryResultStmt::Cell(std::string(buffers[i].get(), lengths[i])));
             }
-            rows.push_back(cells);
+            rows.push_back(std::move(cells));
         }
         if(fetchState != MYSQL_NO_DATA)
         {
@@ -611,7 +680,7 @@ std::unique_ptr<QueryResult> MySqlPreparedStatement::query()
 
         if(fetchOk)
         {
-            result.reset(new QueryResultStmt(rows, types));
+            result.reset(new QueryResultStmt(std::move(rows), types));
             result->NextRow();
         }
     }

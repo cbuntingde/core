@@ -36,6 +36,7 @@
 #include "PacketProcessing.h"
 #include "UpdateData.h"
 #include "LockedQueue.h"
+#include "BoundedQueue.h"
 #include "Packets/AuctionHouse.h"
 #include "Packets/Battleground.h"
 #include "Packets/Channel.h"
@@ -337,7 +338,7 @@ class WorldSession
         bool m_ah_list_recvd;
 
         bool Update(PacketFilter& updater);
-        void QueuePacket(std::unique_ptr<ClientPacket const> packet);
+        void QueuePacket(std::unique_ptr<ClientPacket const> packet, size_t payloadBytes = 0);
         void QueueBinaryPacket(std::unique_ptr<WorldPacket> const& binaryPacket);
         bool CanProcessPackets() const; // Returns true iif we can process packets (ie logged in Player, not a bot, etc ...
         void ProcessPackets(PacketFilter& updater);
@@ -858,7 +859,7 @@ class WorldSession
         uint32 const m_guid; // unique identifier for each session
         std::shared_ptr<WorldSocket> m_socket;
         std::string m_remoteIpAddress; // might also be "<BOT>"
-        LockedQueue<std::unique_ptr<ClientPacket const>, std::mutex> m_recvQueue[PACKET_PROCESS_MAX_TYPE];
+        BoundedQueue<std::unique_ptr<ClientPacket const>, 256, 1024 * 1024> m_recvQueue[PACKET_PROCESS_MAX_TYPE];
         bool m_receivedPacketType[PACKET_PROCESS_MAX_TYPE];
         uint32 m_floodPacketsCount[FLOOD_MAX_OPCODES_TYPE];
         bool m_connected;

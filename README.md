@@ -55,10 +55,19 @@ what players type in game, and automated build and test checks.
   hijack it. This covers names, mail, guild text, search boxes, and
   similar entries.
 
+- Connections close safely when they time out or disconnect. Excessive incoming
+  traffic is limited so one client cannot build an unlimited backlog.
+- If saving fails, the server stops rather than continuing with unreliable
+  progress. The owner must check the failure before restarting; an interrupted
+  save may still need recovery.
+- Restored party members are remembered after they have joined, and each saved
+  group is replaced together so it cannot mix old and new members.
+
 ## Quality checks
 
 - Every change is checked by automated builds and tests covering
-  bot behavior and safe data handling. The server builds clean.
+  bot behavior and safe data handling, including interrupted saves, connection
+  timeouts, and traffic limits.
 
 ## What's next
 

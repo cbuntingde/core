@@ -23,6 +23,7 @@
 // @{
 // \file
 
+#include <atomic>
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
@@ -46,7 +47,7 @@ char serviceDescription[] = "Massive Network Game Object Server";
  *  1 - running
  *  2 - paused
  */
-volatile int m_ServiceStatus = -1;
+std::atomic<int> m_ServiceStatus = -1;
 #else
 #include "PosixDaemon.h"
 #endif

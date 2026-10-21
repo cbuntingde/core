@@ -91,8 +91,9 @@
 
 INSTANTIATE_SINGLETON_1(World);
 
-volatile bool World::m_stopEvent = false;
-uint8 World::m_ExitCode = SHUTDOWN_EXIT_CODE;
+static_assert(std::atomic<bool>::is_always_lock_free, "Signal shutdown requires a lock-free flag");
+std::atomic<bool> World::m_stopEvent{false};
+std::atomic<uint8> World::m_ExitCode{SHUTDOWN_EXIT_CODE};
 std::atomic<uint32> World::m_worldLoopCounter{0};
 
 float World::m_MaxVisibleDistanceOnContinents = DEFAULT_VISIBILITY_DISTANCE;
@@ -1982,6 +1983,12 @@ void World::ProcessAsyncPackets()
 // Update the World !
 void World::Update(uint32 diff)
 {
+    if (CharacterDatabase.HasAsyncWriteError() || WorldDatabase.HasAsyncWriteError() ||
+        LoginDatabase.HasAsyncWriteError() || LogsDatabase.HasAsyncWriteError())
+    {
+        StopNow(ERROR_EXIT_CODE);
+        return;
+    }
     m_currentMSTime = WorldTimer::getMSTime();
     m_currentTime = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::now());
     m_currentDiff = diff;

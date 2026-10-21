@@ -27,6 +27,7 @@
 #define _MASTER_H
 
 #include "Common.h"
+#include <atomic>
 #include "Policies/Singleton.h"
 
 // Start the server
@@ -36,8 +37,8 @@ class Master
         Master();
         ~Master();
         int Run();
-        static volatile uint32  m_masterLoopCounter;
-        static volatile bool    m_handleSigvSignals;
+        static std::atomic<uint32> m_masterLoopCounter;
+        static std::atomic<bool> m_handleSigvSignals;
         static void SigvSignalHandler();
         static void ArmAnticrash();
 

@@ -304,7 +304,7 @@ PacketProcessing GetChatPacketProcessingType(uint32 chatType)
     }
 }
 
-void WorldSession::QueuePacket(std::unique_ptr<ClientPacket const> packet)
+void WorldSession::QueuePacket(std::unique_ptr<ClientPacket const> packet, size_t payloadBytes)
 {
     // Can't sniff non-binary packets :( So bots will not appear in the packet log
 
@@ -328,7 +328,12 @@ void WorldSession::QueuePacket(std::unique_ptr<ClientPacket const> packet)
     }
 
     // put into the correct processing queue
-    m_recvQueue[processingStrategy].add(std::move(packet));
+    if (!m_recvQueue[processingStrategy].tryAdd(std::move(packet), payloadBytes))
+    {
+        // Admission happens on the IO thread; closing the socket is thread-safe.
+        if (m_socket)
+            m_socket->CloseSocket();
+    }
 }
 
 // Add an incoming packet to the queue
@@ -358,7 +363,7 @@ void WorldSession::QueueBinaryPacket(std::unique_ptr<WorldPacket> const& binaryP
     std::unique_ptr<ClientPacket const> clientPacket = opHandle.impl->readPacket(*binaryPacket);
     VerifyPacketWasCorrectlyRead(*binaryPacket, *clientPacket);
 
-    QueuePacket(std::move(clientPacket));
+    QueuePacket(std::move(clientPacket), binaryPacket->size());
 }
 
 // Logging helper for unexpected opcodes
@@ -549,7 +554,9 @@ void WorldSession::ProcessPackets(PacketFilter& updater)
 {
     std::unique_ptr<ClientPacket const> packet;
     m_receivedPacketType[updater.PacketProcessType()] = false;
-    while (CanProcessPackets() && m_recvQueue[updater.PacketProcessType()].next(packet, updater))
+    // Bound each scheduling pass even for query opcodes exempt from flood counters.
+    unsigned processed = 0;
+    while (processed++ < 100 && CanProcessPackets() && m_recvQueue[updater.PacketProcessType()].next(packet, updater))
     {
         m_receivedPacketType[updater.PacketProcessType()] = true;
         if (!AllowPacket(packet->GetOpcode()))
@@ -633,7 +640,7 @@ void WorldSession::ProcessPackets(PacketFilter& updater)
         catch (std::runtime_error &e)
         {
             sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "CATCH Exception 'ASSERT' for account %u / IP %s", GetAccountId(), GetRemoteAddress().c_str());
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, e.what());
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "%s", e.what());
             ProcessAnticheatAction("Anticrash", "ASSERT failed", CHEAT_ACTION_KICK);
         }
         catch (...)

@@ -72,7 +72,7 @@ namespace IO
 #endif
 
     private:
-        volatile bool m_isRunning;
+        std::atomic<bool> m_isRunning;
 
 #if defined(WIN32)
         explicit IoContext(HANDLE completionPort);
