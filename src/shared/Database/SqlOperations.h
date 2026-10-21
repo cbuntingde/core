@@ -61,7 +61,7 @@ class SqlPlainRequest : public SqlOperation
     public:
         SqlPlainRequest(char const* sql) : m_sql(sql){}
         ~SqlPlainRequest() = default;
-        bool Execute(SqlConnection* conn);
+        bool Execute(SqlConnection* conn) override;
         bool IsWrite() const override { return true; }
 };
 
@@ -76,7 +76,7 @@ class SqlTransaction : public SqlOperation
 
         void DelayExecute(SqlOperation* sql)   {   m_queue.push_back(sql); }
 
-        bool Execute(SqlConnection* conn);
+        bool Execute(SqlConnection* conn) override;
         bool IsWrite() const override { return true; }
 };
 
@@ -86,7 +86,7 @@ class SqlPreparedRequest : public SqlOperation
         SqlPreparedRequest(int nIndex, SqlStmtParameters* arg);
         ~SqlPreparedRequest();
 
-        bool Execute(SqlConnection* conn);
+        bool Execute(SqlConnection* conn) override;
         bool IsWrite() const override { return true; }
 
     private:
@@ -127,7 +127,7 @@ class SqlQuery : public SqlOperation
         SqlQuery(char const* sql, MaNGOS::IQueryCallback* callback, SqlResultQueue* queue)
             : m_sql(sql), m_callback(callback), m_queue(queue) {}
         ~SqlQuery() = default;
-        bool Execute(SqlConnection* conn);
+        bool Execute(SqlConnection* conn) override;
 };
 
 class SqlQueryHolder
@@ -169,6 +169,6 @@ class SqlQueryHolderEx : public SqlOperation
     public:
         SqlQueryHolderEx(SqlQueryHolder* holder, MaNGOS::IQueryCallback* callback, SqlResultQueue* queue, uint32 id)
             : SqlOperation(id), m_holder(holder), m_callback(callback), m_queue(queue) {}
-        bool Execute(SqlConnection* conn);
+        bool Execute(SqlConnection* conn) override;
 };
 #endif                                                      //__SQLOPERATIONS_H
