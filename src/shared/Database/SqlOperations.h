@@ -45,6 +45,7 @@ class SqlOperation
         uint32 GetSerialId() const { return serialId; }
         virtual void OnRemove() { delete this; }
         virtual bool Execute(SqlConnection* conn) = 0;
+        virtual bool IsWrite() const { return false; }
         virtual ~SqlOperation() {}
 
     protected:
@@ -61,6 +62,7 @@ class SqlPlainRequest : public SqlOperation
         SqlPlainRequest(char const* sql) : m_sql(sql){}
         ~SqlPlainRequest() = default;
         bool Execute(SqlConnection* conn);
+        bool IsWrite() const override { return true; }
 };
 
 class SqlTransaction : public SqlOperation
@@ -75,6 +77,7 @@ class SqlTransaction : public SqlOperation
         void DelayExecute(SqlOperation* sql)   {   m_queue.push_back(sql); }
 
         bool Execute(SqlConnection* conn);
+        bool IsWrite() const override { return true; }
 };
 
 class SqlPreparedRequest : public SqlOperation
@@ -84,6 +87,7 @@ class SqlPreparedRequest : public SqlOperation
         ~SqlPreparedRequest();
 
         bool Execute(SqlConnection* conn);
+        bool IsWrite() const override { return true; }
 
     private:
         int const m_nIndex;

@@ -23,6 +23,7 @@
 // @{
 // \file
 
+#include <atomic>
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
 #include "RealmList.h"
@@ -63,7 +64,7 @@ char serviceDescription[] = "Massive Network Game Object Server";
  *  1 - running
  *  2 - paused
  */
-volatile int m_ServiceStatus = -1;
+std::atomic<int> m_ServiceStatus = -1;
 #else
 #include "PosixDaemon.h"
 #endif
@@ -74,7 +75,8 @@ void HookSignals();
 
 // Global initialization
 char const* g_mainLogFileName = "Realmd.log";   // Log file path for sLog
-volatile bool stopEvent = false;                // Setting it to true stops the server
+std::atomic<bool> stopEvent{false}; // Setting it to true stops the server.
+static_assert(std::atomic<bool>::is_always_lock_free, "Signal shutdown requires a lock-free flag");
 DatabaseType LoginDatabase;                     // Accessor to the realm server database
 
 // Launch the realm server
@@ -338,6 +340,11 @@ extern int main(int argc, char** argv)
     // Wait for termination signal
     while (!stopEvent)
     {
+        if (LoginDatabase.HasAsyncWriteError())
+        {
+            stopEvent = true;
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         constexpr uint32 kThrottleCleanupIntervalSecs = 60;
@@ -375,7 +382,7 @@ extern int main(int argc, char** argv)
     UnhookSignals();
 
     sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "Halting process...");
-    return 0;
+    return LoginDatabase.HasAsyncWriteError() ? 1 : 0;
 }
 
 // Handle termination signals

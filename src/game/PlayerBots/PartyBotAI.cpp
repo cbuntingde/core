@@ -812,6 +812,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         me->UpdateZone(newzone, newarea);
 
         m_initialized = true;
+        if (Player* leader = GetPartyLeader())
+            if (me->GetGroup() && me->GetGroup() == leader->GetGroup())
+                sPlayerBotMgr.QueuePartyRosterSave(leader->GetObjectGuid());
         return;
     }
 

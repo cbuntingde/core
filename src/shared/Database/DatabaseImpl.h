@@ -40,7 +40,7 @@
         int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap); \
         va_end(ap); \
         \
-        if(res==-1) \
+        if(res < 0 || size_t(res) >= sizeof(szQuery)) \
         { \
             sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format); \
             return false; \

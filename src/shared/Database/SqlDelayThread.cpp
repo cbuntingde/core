@@ -31,8 +31,6 @@ SqlDelayThread::SqlDelayThread(Database* db, SqlConnection* conn)
 
 SqlDelayThread::~SqlDelayThread()
 {
-    //process all requests which might have been queued while thread was stopping
-    ProcessRequests();
     delete m_dbConnection;
 }
 
@@ -43,7 +41,7 @@ void SqlDelayThread::addSerialOperation(SqlOperation *op)
 
 bool SqlDelayThread::HasAsyncQuery()
 {
-    return !m_serialDelayQueue.empty_unsafe();
+    return !m_serialDelayQueue.empty();
 }
 
 void SqlDelayThread::run()
@@ -72,6 +70,8 @@ void SqlDelayThread::run()
         }
     }
 
+    // Finish queued work while this thread still owns its MySQL thread context.
+    ProcessRequests();
     mysql_thread_end();
 }
 
@@ -85,14 +85,25 @@ void SqlDelayThread::ProcessRequests()
     SqlOperation* s = nullptr;
     while (m_dbEngine->NextDelayedOperation(s))
     {
-        s->Execute(m_dbConnection);
-        delete s;
+        std::unique_ptr<SqlOperation> operation(s);
+        if (operation->IsWrite() && m_dbEngine->HasAsyncWriteError())
+            continue;
+        if (!operation->Execute(m_dbConnection) && operation->IsWrite())
+            m_dbEngine->ReportAsyncWriteError();
     }
 
     // Process any serial operations for this worker
     while (m_serialDelayQueue.next(s))
     {
-        s->Execute(m_dbConnection);
-        delete s;
+        std::unique_ptr<SqlOperation> operation(s);
+        if (operation->IsWrite() && m_dbEngine->HasAsyncWriteError())
+            continue;
+        if (!operation->Execute(m_dbConnection) && operation->IsWrite())
+            m_dbEngine->ReportAsyncWriteError();
     }
+}
+
+std::string const& SqlDelayThread::DatabaseName() const
+{
+    return m_dbConnection->DatabaseName();
 }

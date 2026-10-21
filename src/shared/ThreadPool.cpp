@@ -20,6 +20,7 @@
 #include "Log.h"
 #include "IO/Multithreading/CreateThread.h"
 #include <mysql.h>
+#include <stdexcept>
 
 #ifdef WIN32
 #undef ERROR
@@ -29,6 +30,8 @@
 ThreadPool::ThreadPool(std::string const& name, int numThreads, ClearMode when, ErrorHandling mode) :
      m_poolName(name), m_errorHandling(mode), m_size(numThreads), m_clearMode(when), m_active(0)
 {
+    if (numThreads < 0)
+        throw std::invalid_argument("ThreadPool size cannot be negative");
     m_workers.reserve(m_size);
 }
 
@@ -37,21 +40,32 @@ ThreadPool::~ThreadPool()
     std::unique_lock<std::shared_timed_mutex> lock(m_mutex);
     m_status = Status::TERMINATING;
     m_waitForWork.notify_all();
+    lock.unlock();
+    // Join before worker destruction changes the virtual dispatch table.
+    for (auto& worker : m_workers)
+        if (worker->thread.joinable())
+            worker->thread.join();
 }
 
 std::future<void> ThreadPool::processWorkload(Callable pre, Callable post)
+{
+    std::unique_lock<std::shared_timed_mutex> lock(m_mutex);
+    return startWorkload(pre, post);
+}
+
+std::future<void> ThreadPool::startWorkload(Callable pre, Callable post)
 {
     if (m_clearMode == ClearMode::AT_NEXT_WORKLOAD &&
             m_status == Status::READY && m_dirty)
         clearWorkload();
     if (m_status != Status::READY || m_workload.empty())
         return std::future<void>();
+    m_errors.clear();
     m_result = std::promise<void>();
     m_dirty = true;
     m_active = std::min(m_size, m_workload.size());
     m_index = 0;
     m_status = Status::PROCESSING;
-    std::unique_lock<std::shared_timed_mutex> lock(m_mutex);
     for (int i = 0; i < m_active; i++)
         m_workers[i]->prepare(pre, post);
     m_waitForWork.notify_all();
@@ -60,20 +74,22 @@ std::future<void> ThreadPool::processWorkload(Callable pre, Callable post)
 
 std::future<void> ThreadPool::processWorkload(workload_t &workload, Callable pre, Callable post)
 {
+    std::unique_lock<std::shared_timed_mutex> lock(m_mutex);
     if (m_status != Status::READY)
         return std::future<void>();
     m_workload = workload;
     m_dirty = false;
-    return processWorkload(pre, post);
+    return startWorkload(pre, post);
 }
 
 std::future<void> ThreadPool::processWorkload(workload_t &&workload, Callable pre, Callable post)
 {
+    std::unique_lock<std::shared_timed_mutex> lock(m_mutex);
     if (m_status != Status::READY)
         return std::future<void>();
     m_workload = std::move(workload);
     m_dirty = false;
-    return processWorkload(pre, post);
+    return startWorkload(pre, post);
 }
 
 ThreadPool::Status ThreadPool::status() const
@@ -88,6 +104,7 @@ size_t ThreadPool::size() const
 
 std::vector<std::exception_ptr> ThreadPool::taskErrors() const
 {
+    std::shared_lock<std::shared_timed_mutex> lock(m_mutex);
     return m_errors;
 }
 
@@ -100,6 +117,7 @@ void ThreadPool::worker::waitForWork()
 
 ThreadPool &ThreadPool::operator<<(Callable packaged_task)
 {
+    std::unique_lock<std::shared_timed_mutex> lock(m_mutex);
     if (m_status == Status::PROCESSING || m_status == Status::ERROR)
         throw "Attempt to append a task to a load being processed!";
     if (m_clearMode == ClearMode::AT_NEXT_WORKLOAD && m_dirty)
@@ -115,64 +133,50 @@ void ThreadPool::clearWorkload()
 }
 
 ThreadPool::worker::worker(ThreadPool *pool, int id, ThreadPool::ErrorHandling mode) :
-    id(id), errorHandling(mode), pool(pool), thread(IO::Multithreading::CreateThread(pool->m_poolName + "[" + std::to_string(id) + "]", [this](){this->loop_wrapper();}))
+    id(id), errorHandling(mode), pool(pool)
 {
 }
 
 ThreadPool::worker::~worker()
 {
-    thread.join();
+    if (thread.joinable())
+        thread.join();
 }
 
 void ThreadPool::worker::loop_wrapper()
 {
-    if (pool->m_errorHandling == ErrorHandling::NONE)
-        loop();
-    else
+    loop();
+}
+
+bool ThreadPool::executeTask(Callable const& task)
+{
+    if (!task)
+        return true;
+    try { task(); }
+    catch (...)
     {
-        std::exception_ptr err_p;
-        try
+        if (m_errorHandling == ErrorHandling::NONE)
+            throw;
+        if (m_errorHandling == ErrorHandling::IGNORE)
+            return false;
         {
-            loop();
+            std::unique_lock<std::shared_timed_mutex> lock(m_mutex);
+            m_errors.push_back(std::current_exception());
+            if (m_errorHandling == ErrorHandling::TERMINATE && m_status != Status::TERMINATING)
+                m_status = Status::ERROR; // Cancel this batch; all active workers still complete.
+        }
+        try { throw; }
+        catch (std::exception const& error)
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "A ThreadPool task generated an exception: %s", error.what());
         }
         catch (...)
         {
-
-            err_p = std::current_exception();
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "A ThreadPool task generated an unknown exception");
         }
-
-        if (pool->m_errorHandling == ErrorHandling::IGNORE)
-        {
-            if (pool->status() == Status::TERMINATING)
-                return;
-            loop_wrapper();
-            return;
-        }
-        try{
-            if (err_p)
-            {
-                pool->m_errors.push_back(err_p);
-                std::rethrow_exception(err_p);
-            }
-        }
-        catch (const std::exception &e)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "A ThreadPool task generated an exception: %s",e.what());
-        }
-        catch (const std::string &e)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "A ThreadPool task generated an exception: %s", e.c_str());
-        }
-        catch (...)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "A ThreadPool task generated an exception");
-        }
-        if (pool->m_errorHandling == ErrorHandling::TERMINATE)
-            pool->m_status = Status::TERMINATING;
-        if (pool->status() == Status::TERMINATING)
-            return;
-        loop_wrapper();
+        return false;
     }
+    return true;
 }
 
 void ThreadPool::worker::prepare(ThreadPool::Callable pre, ThreadPool::Callable post)
@@ -190,28 +194,29 @@ void ThreadPool::worker::loop()
         if (pool->m_status == Status::TERMINATING)
             return;
 
-        if (pre)
-            pre();
-
-        doWork();
-
-        if (post)
-            post();
+        if (pool->executeTask(pre))
+        {
+            doWork();
+            pool->executeTask(post);
+        }
 
         busy = false;
         int remaning = --(pool->m_active);
         if (!remaning)
         {
+            std::unique_lock<std::shared_timed_mutex> lock(pool->m_mutex);
             if (pool->m_clearMode == ClearMode::UPPON_COMPLETION)
                 pool->clearWorkload();
-            if (pool->m_status == Status::ERROR)
+            if (!pool->m_errors.empty())
             {
-                pool->m_status = Status::READY;
+                if (pool->m_status != Status::TERMINATING)
+                    pool->m_status = Status::READY;
                 pool->m_result.set_exception(pool->m_errors.front());
             }
             else
             {
-                pool->m_status = Status::READY;
+                if (pool->m_status != Status::TERMINATING)
+                    pool->m_status = Status::READY;
                 pool->m_result.set_value();
             }
         }
@@ -229,7 +234,7 @@ void ThreadPool::worker_mq::doWork()
     {
         int w = it;
         it += pool->m_size; //if it fails, we might want to skip this task.
-        pool->m_workload[w]();
+        pool->executeTask(pool->m_workload[w]);
     }
 }
 
@@ -249,7 +254,7 @@ void ThreadPool::worker_sq::doWork()
     int i = pool->m_index++;
     while (i < pool->m_workload.size() && pool->m_status == Status::PROCESSING)
     {
-        pool->m_workload[i]();
+        pool->executeTask(pool->m_workload[i]);
         i = pool->m_index++;
     }
 }

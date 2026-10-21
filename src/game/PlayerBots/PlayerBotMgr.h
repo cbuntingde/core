@@ -99,6 +99,7 @@ class PlayerBotMgr
         void OnBotLogout(PlayerBotEntry *e);
         void OnBotLogin(PlayerBotEntry *e);
         void OnPlayerInWorld(Player* pPlayer);
+        void QueuePartyRosterSave(ObjectGuid leader) { m_rosterSaves.add(leader); }
         void AddTempBot(uint32 account, uint32 time);
         void RefreshTempBot(uint32 account);
 
@@ -111,6 +112,7 @@ class PlayerBotMgr
         PlayerBotStats& GetStats(){ return m_stats; }
         void Start() { m_confEnableRandomBots = true; }
     protected:
+        LockedQueue<ObjectGuid, std::mutex> m_rosterSaves;
         // How long since last update?
         uint32 m_elapsedTime;
         uint32 m_lastBotsRefresh;
